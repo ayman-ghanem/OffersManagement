@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Target, Percent, DollarSign, Gift, Users, MapPin, Tag, Clock, X, Zap, Award, Package, Check } from 'lucide-react';
 import { Play, Minus, RefreshCw } from 'lucide-react';
+import {Layers, CheckCircle, XCircle } from 'lucide-react';
 
 const CompleteOffersAdmin = () => {
     const [activeTab, setActiveTab] = useState('list');
@@ -80,14 +81,14 @@ const CompleteOffersAdmin = () => {
     ];
     /*const discountTypes = [
         { value: 'Percentage', label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
-        { value: 'Fixed', label: 'Fixed Amount (JOD)', icon: <DollarSign className="w-4 h-4" /> },
+        { value: 'Fixed', label: 'Fixed Amount (شيقل)', icon: <DollarSign className="w-4 h-4" /> },
         { value: 'BuyXGetY', label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> },
         { value: 'FreeDelivery', label: 'Free Delivery', icon: <MapPin className="w-4 h-4" /> }
     ];*/
 
     const discountTypes = [
         { value: 1, label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
-        { value: 2, label: 'Fixed Amount (JOD)', icon: <DollarSign className="w-4 h-4" /> },
+        { value: 2, label: 'Fixed Amount (شيقل)', icon: <DollarSign className="w-4 h-4" /> },
         { value: 3, label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> },
         { value: 4, label: 'Free Delivery', icon: <MapPin className="w-4 h-4" /> }
     ];
@@ -133,6 +134,8 @@ const CompleteOffersAdmin = () => {
     const [showItemSelector, setShowItemSelector] = useState(false);
     const [enhancedTestResults, setEnhancedTestResults] = useState([]);
     const [enhancedLoading, setEnhancedLoading] = useState(false);
+    const [stackingTestResults, setStackingTestResults] = useState(null);
+    const [stackingTestLoading, setStackingTestLoading] = useState(false);
 
     const loadItemsForRestaurant = async (restaurantId) => {
         console.log('🔄 Loading products for restaurant:', restaurantId);
@@ -194,6 +197,80 @@ const CompleteOffersAdmin = () => {
             }
             return item;
         }));
+    };
+
+    const testOfferStacking = async () => {
+        if (!enhancedTestConfig.restaurantId) {
+            alert('Please select a restaurant first');
+            return;
+        }
+
+        if (enhancedOrderItems.length === 0) {
+            alert('Please add items to test');
+            return;
+        }
+
+        setStackingTestLoading(true);
+        setStackingTestResults(null);
+
+        try {
+            console.log('🧪 Testing offer stacking for restaurant:', enhancedTestConfig.restaurantId);
+
+            const testData = {
+                userId: enhancedTestConfig.userId,
+                restaurantId: enhancedTestConfig.restaurantId,
+                items: enhancedOrderItems.map(item => ({
+                    productId: item.productId,
+                    categoryId: item.categoryId || '',
+                    price: item.price,
+                    quantity: item.quantity,
+                    total: item.total
+                })),
+                deliveryFee: enhancedTestConfig.deliveryFee,
+                couponCode: enhancedTestConfig.couponCode
+            };
+
+            // Call your existing API to test all offers for this restaurant
+            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/test-multiple`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            });
+
+            if (response.ok) {
+                const results = await response.json();
+                console.log('🎯 Raw API results:', results);
+
+                // Apply stacking logic to the results
+                const stackedResults = applyStackingLogic(results);
+                console.log('🔄 After stacking logic:', stackedResults);
+
+                const orderTotal = enhancedOrderItems.reduce((sum, item) => sum + item.total, 0);
+                const finalPrice = orderTotal + enhancedTestConfig.deliveryFee - stackedResults.totalSavings;
+
+                setStackingTestResults({
+                    offers: stackedResults.processedOffers,
+                    totalSavings: stackedResults.totalSavings,
+                    orderTotal: orderTotal,
+                    finalPrice: finalPrice,
+                    applicableCount: stackedResults.appliedCount,
+                    stoppingReason: stackedResults.stoppingReason
+                });
+
+            } else {
+                const errorText = await response.text();
+                alert('API Error: ' + errorText);
+            }
+
+        } catch (error) {
+            console.error('❌ Stacking test error:', error);
+            alert('Error testing stacking: ' + error.message);
+        } finally {
+            setStackingTestLoading(false);
+        }
     };
 
     const removeEnhancedOrderItem = (index) => {
@@ -304,6 +381,89 @@ const CompleteOffersAdmin = () => {
         }
     };
 
+    const applyStackingLogic = (apiResults) => {
+        console.log('🔄 Applying stacking logic to', apiResults.length, 'offers');
+
+        // Filter only applicable offers and sort by priority (highest first)
+        const applicableOffers = apiResults
+            .filter(result => result.isApplicable && result.discountAmount > 0)
+            .map(result => ({
+                ...result,
+                priority: result.details?.priority || 1,
+                isStackable: result.details?.isStackable !== false // Default to true if not specified
+            }))
+            .sort((a, b) => b.priority - a.priority);
+        console.log("tttt", applicableOffers);
+        console.log('📊 Applicable offers sorted by priority:', applicableOffers.map(o => ({
+            name: o.details?.offerName,
+            priority: o.priority,
+            stackable: o.isStackable,
+            discount: o.discountAmount
+        })));
+
+        const processedOffers = [];
+        let totalSavings = 0;
+        let appliedCount = 0;
+        let stoppingReason = 'All offers processed';
+        let processingContinues = true;
+
+        // Process all offers (both applicable and non-applicable) for display
+        apiResults.forEach(result => {
+            const isApplicable = applicableOffers.find(a => a.details?.offerId === result.details?.offerId);
+
+            if (isApplicable && processingContinues) {
+                // This offer can be applied
+                processedOffers.push({
+                    ...result,
+                    applied: true,
+                    stackingStatus: 'Applied'
+                });
+
+                totalSavings += result.discountAmount || 0;
+                appliedCount++;
+
+                console.log(`✅ Applied: ${result.details?.name} - ${result.discountAmount} JOD (Stackable: ${result.details?.isStackable})`);
+
+                // Check if this offer is non-stackable
+                if (result.details?.isStackable === false) {
+                    console.log(`🚫 "${result.details?.name}" is NON-STACKABLE - stopping further processing`);
+                    stoppingReason = `Non-stackable offer "${result.details?.name}" applied - remaining offers ignored`;
+                    processingContinues = false;
+                }
+
+            } else if (isApplicable && !processingContinues) {
+                // This offer would apply but was blocked by non-stackable offer
+                processedOffers.push({
+                    ...result,
+                    applied: false,
+                    stackingStatus: 'Blocked by non-stackable offer',
+                    ignoredReason: 'Previous non-stackable offer was applied'
+                });
+
+                console.log(`❌ Blocked: ${result.details?.name} - would save ${result.discountAmount} JOD but blocked`);
+
+            } else {
+                // This offer doesn't apply due to business rules
+                processedOffers.push({
+                    ...result,
+                    applied: false,
+                    stackingStatus: 'Not applicable'
+                });
+            }
+        });
+
+        console.log('🎯 Stacking Summary:');
+        console.log(`  Applied: ${appliedCount} offers`);
+        console.log(`  Total Savings: ${totalSavings} JOD`);
+        console.log(`  Reason: ${stoppingReason}`);
+
+        return {
+            processedOffers,
+            totalSavings,
+            appliedCount,
+            stoppingReason
+        };
+    };
     const getFilteredAvailableItems = () => {
         console.log('🔍 Filtering items. Available items:', availableItems.length);
         if (!itemSearch) return availableItems;
@@ -353,7 +513,7 @@ const CompleteOffersAdmin = () => {
     const [productRestaurantSearch, setProductRestaurantSearch] = useState('');
     const [selectedProductRestaurants, setSelectedProductRestaurants] = useState([]);
     const [subOfferType, setSubOfferType] = useState('order'); // 'product', 'category', 'order'
-    const [comboTargetType, setComboTargetType] = useState('product'); // 'product' or 'category'
+    const [comboTargetType, setComboTargetType] = useState('Product'); // 'product' or 'category'
 
 // Add these functions to your admin component
     const loadRestaurants = async () => {
@@ -614,7 +774,7 @@ const CompleteOffersAdmin = () => {
 
         // Determine if we should show products or categories
         const isProductTarget = formData.offerType === 1 ||
-            ([5, 6, 7].includes(formData.offerType) && subOfferType === 'product');
+            ([5, 6, 7, 9].includes(formData.offerType) && subOfferType === 'product');
 
         console.log('🎯 Is product target:', isProductTarget);
 
@@ -720,7 +880,7 @@ const CompleteOffersAdmin = () => {
         console.log('🔍 Selected combo restaurant:', selectedComboRestaurant);
         console.log('🔍 Search term:', comboProductSearch);
 
-        let filteredItems = comboTargetType === 'product' ? products : categories;
+        let filteredItems = comboTargetType === 'Product' ? products : categories;
         console.log(`📦 Total ${comboTargetType}s available:`, filteredItems.length);
 
         // Debug: Show sample items and their restaurant associations
@@ -774,7 +934,7 @@ const CompleteOffersAdmin = () => {
 
 
     const addComboItem = (itemId) => {
-        const item = comboTargetType === 'product'
+        const item = comboTargetType === 'Product'
             ? products.find(p => p.id === itemId)
             : categories.find(c => c.id === itemId);
 
@@ -818,14 +978,14 @@ const CompleteOffersAdmin = () => {
 
         // If no data is loaded yet for the selected restaurants, load it
         if (formData.RestaurantIds.length > 0) {
-            const currentItems = comboTargetType === 'product' ? products : categories;
+            const currentItems = comboTargetType === 'Product' ? products : categories;
             const hasDataForRestaurants = formData.RestaurantIds.some(restId =>
                 currentItems.some(item => item.restaurantId === restId)
             );
 
             if (!hasDataForRestaurants) {
                 console.log('🔄 No data found for restaurants, reloading...');
-                if (comboTargetType === 'product') {
+                if (comboTargetType === 'Product') {
                     loadProductsForRestaurants(formData.RestaurantIds);
                 } else {
                     loadCategoriesForRestaurants(formData.RestaurantIds);
@@ -844,11 +1004,16 @@ const CompleteOffersAdmin = () => {
         // Load appropriate data for the new target type if restaurants are selected
         if (formData.RestaurantIds.length > 0) {
             console.log('📦 Loading data for new combo target type:', newTargetType);
-            if (newTargetType === 'product') {
+            if (newTargetType === 'Product') {
                 loadProductsForRestaurants(formData.RestaurantIds);
             } else {
                 loadCategoriesForRestaurants(formData.RestaurantIds);
             }
+            // Small delay to ensure state is updated
+            setTimeout(() => {
+                console.log(`✅ After switching to ${newTargetType}:`,
+                    newTargetType === 'Product' ? products.length : categories.length, 'items loaded');
+            }, 500);
         }
     };
     const loadOffers = async () => {
@@ -903,7 +1068,7 @@ const CompleteOffersAdmin = () => {
 
         // Determine if this offer type needs product/category targeting
         const needsProductCategoryTargeting = formData.offerType === 1 || formData.offerType === 2 || 
-            ([5, 6, 7].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
+            ([5, 6, 7, 9].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
 
         console.log('🎯 Needs product/category targeting:', needsProductCategoryTargeting);
 
@@ -954,6 +1119,8 @@ const CompleteOffersAdmin = () => {
         }
     }, [enhancedTestConfig.restaurantId]);
     
+    
+    
     const handleInputChange = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -993,7 +1160,7 @@ const CompleteOffersAdmin = () => {
                 Targets: (() => {
                     // For combo offers, set targets from combo items
                     if (formData.offerType === 8 && formData.comboItems.length > 0) {
-                        const targetType = comboTargetType === 'product' ? 1 : 2; // 1 = Product, 2 = Category
+                        const targetType = comboTargetType === 'Product' ? 1 : 2; // 1 = Product, 2 = Category
                         return formData.comboItems.map(comboItem => ({
                             targetType: targetType,
                             targetId: comboItem.productId
@@ -1001,7 +1168,7 @@ const CompleteOffersAdmin = () => {
                     }
 
                     // For other offer types with sub-targeting
-                    if ([5, 6, 7].includes(formData.offerType)) {
+                    if ([5, 6, 7, 9].includes(formData.offerType)) {
                         const targetType = subOfferType === 'product' ? 1 : subOfferType === 'category' ? 2 : 3;
                         return formData.Targets.map(targetId => ({
                             targetType: targetType,
@@ -1088,7 +1255,7 @@ const CompleteOffersAdmin = () => {
         setSelectedComboRestaurant('');
         setSelectedProductRestaurants([]); // Add this line
         setSubOfferType('order'); // Reset sub-offer type
-        setComboTargetType('product'); // Add this line
+        setComboTargetType('Product'); // Add this line
 
         setEditingOffer(null);
 
@@ -1407,9 +1574,9 @@ const CompleteOffersAdmin = () => {
                 );
 
                 if (hasCategories && !hasProducts) {
-                    setComboTargetType('category');
+                    setComboTargetType('Category');
                 } else {
-                    setComboTargetType('product'); // default
+                    setComboTargetType('Product'); // default
                 }
             }
             console.log('📝 STEP 2: Setting form data:', formDataToSet);
@@ -1489,7 +1656,7 @@ const CompleteOffersAdmin = () => {
     };
 
     const formatTimeOnlyForInput = (timeOnlyValue) => {
-        if (!timeOnlyValue) return '';
+        if (!timeOnlyValue) return null;
 
         try {
             // TimeOnly typically comes as "14:30:00" or "14:30:00.000"
@@ -1504,7 +1671,7 @@ const CompleteOffersAdmin = () => {
             return timeOnlyValue.toString();
         } catch (error) {
             console.warn('Error parsing TimeOnly:', timeOnlyValue, error);
-            return '';
+            return null;
         }
     };
 
@@ -1763,7 +1930,7 @@ const CompleteOffersAdmin = () => {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">
-                                        Discount Value {formData.discountType === 1 ? '(%)' : '(JOD)'}
+                                        Discount Value {formData.discountType === 1 ? '(%)' : '(شيقل)'}
                                     </label>
                                     <input
                                         type="number"
@@ -1776,7 +1943,7 @@ const CompleteOffersAdmin = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Max Discount (JOD)</label>
+                                    <label className="block text-sm font-medium mb-1">Max Discount (شيقل)</label>
                                     <input
                                         type="number"
                                         value={formData.maxDiscountAmount}
@@ -1788,7 +1955,7 @@ const CompleteOffersAdmin = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Min Order Amount (JOD)</label>
+                                    <label className="block text-sm font-medium mb-1">Min Order Amount (شيقل)</label>
                                     <input
                                         type="number"
                                         value={formData.minOrderAmount}
@@ -1902,6 +2069,70 @@ const CompleteOffersAdmin = () => {
                                 <Zap className="w-5 h-5 text-red-600" />
                                 Flash Sale Configuration
                             </h3>
+
+                            {/* Flash Sale Target Level */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2">Flash Sale Target Level</label>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSubOfferType('product');
+                                            setFormData(prev => ({ ...prev, Targets: [] }));
+                                        }}
+                                        className={`p-3 border rounded-md text-left ${
+                                            subOfferType === 'product'
+                                                ? 'border-red-500 bg-red-100 text-red-700'
+                                                : 'border-gray-300 hover:border-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Tag className="w-4 h-4" />
+                                            <span className="font-medium">Specific Products</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600">Flash sale on selected products</p>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSubOfferType('category');
+                                            setFormData(prev => ({ ...prev, Targets: [] }));
+                                        }}
+                                        className={`p-3 border rounded-md text-left ${
+                                            subOfferType === 'category'
+                                                ? 'border-red-500 bg-red-100 text-red-700'
+                                                : 'border-gray-300 hover:border-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Target className="w-4 h-4" />
+                                            <span className="font-medium">Product Categories</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600">Flash sale on categories</p>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSubOfferType('order');
+                                            setFormData(prev => ({ ...prev, Targets: [] }));
+                                        }}
+                                        className={`p-3 border rounded-md text-left ${
+                                            subOfferType === 'order'
+                                                ? 'border-red-500 bg-red-100 text-red-700'
+                                                : 'border-gray-300 hover:border-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <DollarSign className="w-4 h-4" />
+                                            <span className="font-medium">Entire Order</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600">Flash sale on total order</p>
+                                    </button>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Total Quantity Available</label>
@@ -2294,9 +2525,9 @@ const CompleteOffersAdmin = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <button
                                     type="button"
-                                    onClick={() => handleComboTargetTypeChange('product')}
+                                    onClick={() => handleComboTargetTypeChange('Product')}
                                     className={`p-3 border rounded-md text-left ${
-                                        comboTargetType === 'product'
+                                        comboTargetType === 'Product'
                                             ? 'border-orange-500 bg-orange-100 text-orange-700'
                                             : 'border-gray-300 hover:border-gray-400'
                                     }`}
@@ -2310,9 +2541,9 @@ const CompleteOffersAdmin = () => {
 
                                 <button
                                     type="button"
-                                    onClick={() => handleComboTargetTypeChange('category')}
+                                    onClick={() => handleComboTargetTypeChange('Category')}
                                     className={`p-3 border rounded-md text-left ${
-                                        comboTargetType === 'category'
+                                        comboTargetType === 'Category'
                                             ? 'border-orange-500 bg-orange-100 text-orange-700'
                                             : 'border-gray-300 hover:border-gray-400'
                                     }`}
@@ -2355,7 +2586,7 @@ const CompleteOffersAdmin = () => {
                                 </p>
                                 <div className="space-y-2">
                                     {formData.comboItems.map(comboItem => {
-                                        const item = comboTargetType === 'product'
+                                        const item = comboTargetType === 'Product'
                                             ? products.find(p => p.id === comboItem.productId)
                                             : categories.find(c => c.id === comboItem.productId);
                                         const restaurant = restaurants.find(r => r.id === item?.restaurantId);
@@ -2364,14 +2595,14 @@ const CompleteOffersAdmin = () => {
                                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
                                                     <div>
                                                         <span className="font-medium text-sm">{item.name}</span>
-                                                        {comboTargetType === 'product' && item.price && (
-                                                            <span className="text-xs text-gray-500 block">{item.price} JOD</span>
+                                                        {comboTargetType === 'Product' && item.price && (
+                                                            <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                                         )}
                                                         <span className="text-xs text-blue-600 block">
                                                         {restaurant?.name || 'Unknown Restaurant'}
                                                     </span>
                                                         <span className="text-xs text-purple-600 block">
-                                                        {comboTargetType === 'product' ? 'Product' : 'Category'}
+                                                        {comboTargetType === 'Product' ? 'Product' : 'Category'}
                                                     </span>
                                                     </div>
                                                     <div>
@@ -2399,7 +2630,7 @@ const CompleteOffersAdmin = () => {
                                                         <span className="text-xs text-gray-600">Est. Savings/combo</span>
                                                         <span className="block text-sm font-medium text-green-600">
                                                         {comboTargetType === 'product' && item.price ?
-                                                            ((item.price || 0) * comboItem.requiredQuantity * (comboItem.discountPercent / 100)).toFixed(2) + ' JOD'
+                                                            ((item.price || 0) * comboItem.requiredQuantity * (comboItem.discountPercent / 100)).toFixed(2) + ' شيقل'
                                                             : 'Variable'
                                                         }
                                                     </span>
@@ -2425,12 +2656,12 @@ const CompleteOffersAdmin = () => {
                         <div className="border rounded-md">
                             <div className="p-3 bg-gray-50 border-b flex items-center justify-between">
                                 <h4 className="font-medium text-sm">
-                                    Add {comboTargetType === 'product' ? 'Products' : 'Categories'} to Combo
+                                    Add {comboTargetType === 'Product' ? 'Products' : 'Categories'} to Combo
                                 </h4>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="text"
-                                        placeholder={`Search ${comboTargetType === 'product' ? 'products' : 'categories'}...`}
+                                        placeholder={`Search ${comboTargetType === 'Product' ? 'products' : 'categories'}...`}
                                         value={comboProductSearch}
                                         onChange={(e) => setComboProductSearch(e.target.value)}
                                         className="px-2 py-1 border rounded text-sm w-48"
@@ -2439,7 +2670,7 @@ const CompleteOffersAdmin = () => {
                                         type="button"
                                         onClick={() => {
                                             console.log('🔄 Manual reload triggered');
-                                            if (comboTargetType === 'product') {
+                                            if (comboTargetType === 'Product') {
                                                 loadProductsForRestaurants(formData.RestaurantIds);
                                             } else {
                                                 loadCategoriesForRestaurants(formData.RestaurantIds);
@@ -2455,16 +2686,16 @@ const CompleteOffersAdmin = () => {
                             <div className="max-h-48 overflow-y-auto">
                                 {getFilteredComboItems().length === 0 ? (
                                     <div className="p-4 text-center text-gray-500">
-                                        <p>No {comboTargetType === 'product' ? 'products' : 'categories'} found</p>
+                                        <p>No {comboTargetType === 'Product' ? 'products' : 'categories'} found</p>
                                         <div className="text-xs mt-2 space-y-1">
                                             <p>Restaurants selected: {formData.RestaurantIds.length}</p>
-                                            <p>Total {comboTargetType}s: {comboTargetType === 'product' ? products.length : categories.length}</p>
+                                            <p>Total {comboTargetType}s: {comboTargetType === 'Product' ? products.length : categories.length}</p>
                                             <p>Check console for debugging info</p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                if (comboTargetType === 'product') {
+                                                if (comboTargetType === 'Product') {
                                                     loadProductsForRestaurants(formData.RestaurantIds);
                                                 } else {
                                                     loadCategoriesForRestaurants(formData.RestaurantIds);
@@ -2485,8 +2716,8 @@ const CompleteOffersAdmin = () => {
                                             }`}>
                                                 <div className="flex-1">
                                                     <span className="text-sm font-medium">{item.name}</span>
-                                                    {comboTargetType === 'product' && item.price && (
-                                                        <span className="text-xs text-gray-500 block">{item.price} JOD</span>
+                                                    {comboTargetType === 'Product' && item.price && (
+                                                        <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                                     )}
                                                     <span className="text-xs text-blue-500">
                                                     {restaurant?.name || 'Unknown Restaurant'}
@@ -2529,7 +2760,7 @@ const CompleteOffersAdmin = () => {
     const renderTargetSelection = () => {
         // Show for product/category offers OR sub-targeted loyalty/timeslot/firstorder offers
         const showTargets = formData.offerType === 1 || formData.offerType === 2 ||
-            ([5, 6, 7].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
+            ([5, 6, 7, 9].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
 
         if (!showTargets) return null;
 
@@ -2586,7 +2817,7 @@ const CompleteOffersAdmin = () => {
                                     <span key={targetId} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
                                     {item ? item.name : `Item ${targetId}`}
                                         {isProductTarget && item?.price && (
-                                            <span className="text-green-600">- {item.price} JOD</span>
+                                            <span className="text-green-600">- {item.price} شيقل</span>
                                         )}
                                         <button
                                             type="button"
@@ -2631,7 +2862,7 @@ const CompleteOffersAdmin = () => {
                                     <div>
                                         <span className="text-sm font-medium">{item.name}</span>
                                         {isProductTarget && item.price && (
-                                            <span className="text-xs text-gray-500 block">{item.price} JOD</span>
+                                            <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                         )}
                                         <span className="text-xs text-gray-400 block">
                                         Restaurant: {restaurants.find(r => r.id === item.restaurantId)?.name || item.restaurantId}
@@ -2708,7 +2939,7 @@ const CompleteOffersAdmin = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium mb-1">Delivery Fee (JOD)</label>
+                        <label className="block text-sm font-medium mb-1">Delivery Fee (شيقل)</label>
                         <input
                             type="number"
                             value={enhancedTestConfig.deliveryFee}
@@ -2800,7 +3031,7 @@ const CompleteOffersAdmin = () => {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-600 mb-1">Price (JOD)</label>
+                                <label className="block text-xs text-gray-600 mb-1">Price (شيقل)</label>
                                 <input
                                     type="number"
                                     value={item.price}
@@ -2823,7 +3054,7 @@ const CompleteOffersAdmin = () => {
                             <div>
                                 <span className="text-xs text-gray-600">Total</span>
                                 <span className="block text-sm font-medium text-green-600">
-                    {item.total.toFixed(2)} JOD
+                    {item.total.toFixed(2)} شيقل
                 </span>
                             </div>
                             <div>
@@ -2855,6 +3086,23 @@ const CompleteOffersAdmin = () => {
                         )}
                         {enhancedLoading ? 'Testing...' : 'Run Tests'}
                     </button>
+                    <button
+                        onClick={testOfferStacking}
+                        disabled={stackingTestLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                        {stackingTestLoading ? (
+                            <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Testing Stacking...
+                            </>
+                        ) : (
+                            <>
+                                <Layers className="w-4 h-4" />
+                                Test Offer Stacking
+                            </>
+                        )}
+                    </button>
                 </div>
 
                 {enhancedTestConfig.testMode === 'single' && (
@@ -2879,7 +3127,7 @@ const CompleteOffersAdmin = () => {
                                         <h4 className="font-medium text-sm">{offer.name}</h4>
                                         <p className="text-xs text-gray-500">
                                             {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
-                                            {offer.discountValue && ` • ${offer.discountValue}${offer.discountType === 1 ? '%' : ' JOD'}`}
+                                            {offer.discountValue && ` • ${offer.discountValue}${offer.discountType === 1 ? '%' : ' شيقل'}`}
                                         </p>
                                     </div>
                                 </div>
@@ -2924,7 +3172,7 @@ const CompleteOffersAdmin = () => {
                                             <span>Discount: {getDiscountTypeName(result.offer?.discountType)}</span>
                                             {result.offer?.discountValue && (
                                                 <span> • Value: {result.offer.discountValue}
-                                                    {result.offer.discountType === 1 ? '%' : ' JOD'}
+                                                    {result.offer.discountType === 1 ? '%' : ' شيقل'}
                                             </span>
                                             )}
                                         </div>
@@ -2935,7 +3183,7 @@ const CompleteOffersAdmin = () => {
                                     {result.isApplicable && (
                                         <div className="text-right">
                                             <div className="text-2xl font-bold text-green-600">
-                                                {result.discountAmount?.toFixed(2) || '0.00'} JOD
+                                                {result.discountAmount?.toFixed(2) || '0.00'} شيقل
                                             </div>
                                             <div className="text-xs text-gray-500">Saved</div>
                                         </div>
@@ -2957,12 +3205,161 @@ const CompleteOffersAdmin = () => {
                                 {enhancedTestResults
                                     .filter(r => r.isApplicable)
                                     .reduce((sum, r) => sum + (r.discountAmount || 0), 0)
-                                    .toFixed(2)} JOD
+                                    .toFixed(2)} شيقل
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            {stackingTestResults && (
+                <div className="bg-white rounded-lg border p-6 mt-6">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-purple-600" />
+                        Offer Stacking Results
+                    </h3>
+
+                    {/* Summary Card */}
+                    <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                            <div>
+                                <div className="text-2xl font-bold text-purple-600">{stackingTestResults.applicableCount}</div>
+                                <div className="text-sm text-gray-600">Offers Applied</div>
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold text-green-600">{stackingTestResults.totalSavings.toFixed(2)} JOD</div>
+                                <div className="text-sm text-gray-600">Total Savings</div>
+                            </div>
+                            <div>
+                                <div className="text-lg text-gray-600">{stackingTestResults.orderTotal.toFixed(2)} JOD</div>
+                                <div className="text-sm text-gray-600">Original Price</div>
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold text-blue-600">{stackingTestResults.finalPrice.toFixed(2)} JOD</div>
+                                <div className="text-sm text-gray-600">Final Price</div>
+                            </div>
+                        </div>
+
+                        {stackingTestResults.totalSavings > 0 && (
+                            <div className="mt-3 text-center">
+                                <div className="text-lg font-semibold text-green-600">
+                                    You save {((stackingTestResults.totalSavings / (stackingTestResults.orderTotal + enhancedTestConfig.deliveryFee)) * 100).toFixed(1)}%
+                                    with {stackingTestResults.applicableCount} combined offers!
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Stacking Logic Explanation */}
+                        <div className="mt-3 p-2 bg-yellow-50 rounded text-sm">
+                            <strong>Stacking Logic:</strong> {stackingTestResults.stoppingReason}
+                        </div>
+                    </div>
+
+                    {/* Individual Offer Results */}
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-gray-800">Individual Offer Breakdown:</h4>
+                        {stackingTestResults.offers.map((result, index) => (
+                            <div key={index} className={`border rounded-lg p-4 ${
+                                result.applied
+                                    ? 'border-green-200 bg-green-50'
+                                    : result.isApplicable
+                                        ? 'border-yellow-200 bg-yellow-50'  // Would apply but blocked
+                                        : 'border-gray-200 bg-gray-50'      // Not applicable
+                            }`}>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        {result.applied ? (
+                                            <CheckCircle className="w-5 h-5 text-green-600" />
+                                        ) : result.isApplicable ? (
+                                            <XCircle className="w-5 h-5 text-yellow-600" />  // Blocked
+                                        ) : (
+                                            <XCircle className="w-5 h-5 text-gray-400" />    // Not applicable
+                                        )}
+
+                                        {getOfferIcon(result.details?.offerType)}
+
+                                        <div>
+                                            <h5 className="font-medium">{result.details?.offerName || 'Unknown Offer'}</h5>
+                                            <div className="text-sm text-gray-600">
+                                                <span>Type: {getOfferTypeName(result.details?.offerType)}</span>
+                                                {result.offer?.priority && (
+                                                    <>
+                                                        <span className="mx-2">•</span>
+                                                        <span>Priority: {result.details.priority}</span>
+                                                    </>
+                                                )}
+                                                {result.details?.isStackable !== undefined && (
+                                                    <>
+                                                        <span className="mx-2">•</span>
+                                                        <span className={result.details.isStackable ? 'text-green-600' : 'text-red-600'}>
+                                                {result.details.isStackable ? 'Stackable' : 'Non-Stackable'}
+                                            </span>
+                                                    </>
+                                                )}
+                                            </div>
+
+                                            <div className="text-sm text-gray-700 mt-1">
+                                                {result.message}
+                                            </div>
+
+                                            {/* Show blocking reason */}
+                                            {result.ignoredReason && (
+                                                <div className="text-xs text-yellow-700 mt-1 font-medium">
+                                                    ⚠️ {result.ignoredReason}
+                                                </div>
+                                            )}
+
+                                            {/* Show stacking status */}
+                                            <div className="text-xs mt-1">
+                                    <span className={`px-2 py-1 rounded ${
+                                        result.applied
+                                            ? 'bg-green-100 text-green-700'
+                                            : result.isApplicable
+                                                ? 'bg-yellow-100 text-yellow-700'
+                                                : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                        {result.stackingStatus || (result.applied ? 'Applied' : 'Not Applied')}
+                                    </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-right">
+                                        {result.applied ? (
+                                            <div className="text-2xl font-bold text-green-600">
+                                                -{result.discountAmount?.toFixed(2) || '0.00'} JOD
+                                            </div>
+                                        ) : result.isApplicable ? (
+                                            <div className="text-lg text-yellow-600">
+                                                ({result.discountAmount?.toFixed(2) || '0.00'} JOD)
+                                            </div>
+                                        ) : (
+                                            <div className="text-lg text-gray-400">
+                                                Not Applicable
+                                            </div>
+                                        )}
+                                        <div className="text-xs text-gray-500">
+                                            {result.applied ? 'Applied' : result.isApplicable ? 'Blocked' : 'N/A'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Stacking Information */}
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <h5 className="font-medium text-blue-800 mb-2">📚 How Stacking Works:</h5>
+                        <div className="text-sm text-blue-700 space-y-1">
+                            <div>• Offers are processed by priority (highest first)</div>
+                            <div>• Stackable offers can combine with others</div>
+                            <div>• Non-stackable offers stop further processing</div>
+                            <div>• You get the best combination automatically</div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Item Selector Modal */}
             {showItemSelector && (
@@ -3034,7 +3431,7 @@ const CompleteOffersAdmin = () => {
                                 </span>
                                                         {product.price && (
                                                             <span className="text-xs text-gray-500">
-                                        {product.price.toFixed(2)} JOD
+                                        {product.price.toFixed(2)} شيقل
                                     </span>
                                                         )}
                                                         {/* Show category name if available */}
