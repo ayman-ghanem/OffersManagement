@@ -20,6 +20,10 @@ const CompleteOffersAdmin = () => {
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
     const [selectedBranches, setSelectedBranches] = useState([]);
 
+
+    const [selectedCities, setSelectedCities] = useState([]);
+    const [showCitySelector, setShowCitySelector] = useState(false);
+
     // Complete form state for ALL offer types
     const [formData, setFormData] = useState({
         name: '',
@@ -127,6 +131,7 @@ const CompleteOffersAdmin = () => {
     const [enhancedLoading, setEnhancedLoading] = useState(false);
     const [stackingTestResults, setStackingTestResults] = useState(null);
     const [stackingTestLoading, setStackingTestLoading] = useState(false);
+    const [showCityOnlyOffers, setShowCityOnlyOffers] = useState(false);
 
     const loadItemsForRestaurant = async (restaurantId) => {
         console.log('🔄 Loading products for restaurant:', restaurantId);
@@ -284,7 +289,52 @@ const CompleteOffersAdmin = () => {
                 : [...prev.selectedOffers, offerId]
         }));
     };
+    const isOrderLevelOffer = (offer) => {
+        // Check if offer has no specific product/category targets
+        const hasNoTargets = !offer.targets || offer.targets.length === 0;
 
+        // Check if it's order-level offer types (3=Order Total, 4=Delivery)
+        const isOrderType = [3, 4].includes(offer.offerType);
+
+        // Check if it's sub-targeted offer but set to 'order' level
+        const isSubOrderLevel = [5, 6, 7, 9].includes(offer.offerType) &&
+            (offer.subTargetType === 'order' || (!offer.subTargetType && hasNoTargets));
+
+        return isOrderType || isSubOrderLevel;
+    };
+    const deselectAllRestaurantsInCity = (cityName) => {
+        const cityRestaurants = getRestaurantsInCity(cityName);
+        const cityBranches = cityRestaurants.map(r => ({
+            restaurantId: r.id,
+            branchId: r.branchId
+        }));
+
+        // Remove city branches from existing selection
+        setFormData(prev => {
+            const updatedBranches = prev.RestaurantBranches.filter(selectedBranch =>
+                !cityBranches.some(cityBranch =>
+                    cityBranch.restaurantId === selectedBranch.restaurantId &&
+                    cityBranch.branchId === selectedBranch.branchId
+                )
+            );
+
+            const updatedRestaurantIds = [...new Set(updatedBranches.map(b => b.restaurantId))];
+
+            // Collapse restaurants that no longer have selected branches
+            const removedRestaurantIds = [...new Set(cityBranches.map(b => b.restaurantId))];
+            setExpandedRestaurants(prev =>
+                prev.filter(id => !removedRestaurantIds.includes(id) ||
+                    updatedBranches.some(b => b.restaurantId === id))
+            );
+
+            return {
+                ...prev,
+                selectedBranches: updatedBranches,
+                RestaurantIds: updatedRestaurantIds
+            };
+        });
+    };
+    
     const getUniqueRestaurants = () => {
         // Group restaurants by ID to show each restaurant once
         const uniqueRestaurants = restaurants.reduce((acc, restaurant) => {
@@ -305,6 +355,35 @@ const CompleteOffersAdmin = () => {
         return restaurants.filter(r => r.id === restaurantId);
     };
 
+
+    const getUniqueCities = () => {
+        const cities = [...new Set(restaurants.map(r => r.cityName).filter(Boolean))];
+        return cities.sort();
+    };
+
+    const getRestaurantsInCity = (cityName) => {
+        return restaurants.filter(r => r.cityName === cityName);
+    };
+
+    const selectAllRestaurantsInCity = (cityName) => {
+        const cityRestaurants = getRestaurantsInCity(cityName);
+        const cityBranches = cityRestaurants.map(r => ({
+            restaurantId: r.id,
+            branchId: r.branchId
+        }));
+
+        // Add to existing selection
+        setFormData(prev => ({
+            ...prev,
+            RestaurantBranches: [...prev.RestaurantBranches, ...cityBranches],
+            RestaurantIds: [...new Set([...prev.RestaurantIds, ...cityRestaurants.map(r => r.id)])]
+        }));
+
+        // Auto-expand these restaurants
+        const restaurantIds = [...new Set(cityRestaurants.map(r => r.id))];
+        setExpandedRestaurants(prev => [...new Set([...prev, ...restaurantIds])]);
+    };
+    
     const toggleRestaurantExpansion = (restaurantId) => {
         setExpandedRestaurants(prev => {
             const isExpanded = prev.includes(restaurantId);
@@ -409,7 +488,83 @@ const CompleteOffersAdmin = () => {
                     </div>
                 </div>
             )}
+            {/* City Quick Select */}
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-orange-800">Quick Select by City</h4>
+                    <button
+                        type="button"
+                        onClick={() => setShowCitySelector(!showCitySelector)}
+                        className="text-orange-600 text-sm"
+                    >
+                        {showCitySelector ? 'Hide' : 'Show'} Cities
+                    </button>
+                </div>
 
+                {showCitySelector && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {getUniqueCities().map(city => {
+                            const cityRestaurants = getRestaurantsInCity(city);
+                            const totalBranches = cityRestaurants.length;
+                            const selectedBranches = cityRestaurants.filter(restaurant =>
+                                formData.RestaurantBranches.some(b =>
+                                    b.restaurantId === restaurant.id && b.branchId === restaurant.branchId
+                                )
+                            ).length;
+
+                            const isFullySelected = selectedBranches === totalBranches && totalBranches > 0;
+                            const hasPartialSelection = selectedBranches > 0 && selectedBranches < totalBranches;
+
+                            return (
+                                <div key={city} className={`p-3 border rounded-lg ${
+                                    isFullySelected ? 'bg-green-50 border-green-300' :
+                                        hasPartialSelection ? 'bg-yellow-50 border-yellow-300' :
+                                            'bg-white border-gray-300'
+                                }`}>
+                                    <div className="text-center mb-2">
+                                        <div className="font-medium text-sm">📍 {city}</div>
+                                        <div className="text-xs text-gray-600">
+                                            {totalBranches} branches
+                                        </div>
+                                        {selectedBranches > 0 && (
+                                            <div className="text-xs font-medium text-blue-600">
+                                                {selectedBranches}/{totalBranches} selected
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-1">
+                                        {/* SELECT ALL BUTTON */}
+                                        <button
+                                            type="button"
+                                            onClick={() => selectAllRestaurantsInCity(city)}
+                                            className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                                isFullySelected
+                                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                                            }`}
+                                            disabled={isFullySelected}
+                                        >
+                                            {isFullySelected ? 'All Selected' : 'Select All'}
+                                        </button>
+
+                                        {/* DESELECT ALL BUTTON */}
+                                        {selectedBranches > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => deselectAllRestaurantsInCity(city)}
+                                                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                            >
+                                                Deselect
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
             {/* Restaurant and branch list */}
             {restaurants.length === 0 ? (
                 <div className="border rounded-md p-4 text-center text-gray-500">
@@ -1343,6 +1498,15 @@ const CompleteOffersAdmin = () => {
                 minItemQuantity: formData.minItemQuantity ? parseInt(formData.minItemQuantity) : null,
                 flashSaleQuantity: formData.flashSaleQuantity ? parseInt(formData.flashSaleQuantity) : null,
 
+                // Add city tracking for logging/reporting
+                selectedCities: getUniqueCities().filter(city =>
+                    getRestaurantsInCity(city).every(restaurant =>
+                        formData.RestaurantBranches.some(b =>
+                            b.restaurantId === restaurant.id && b.branchId === restaurant.branchId
+                        )
+                    )
+                ),
+                
                 // With this complete branch data:
                 RestaurantBranches: formData.RestaurantBranches.map(selectedBranch => {
                     // Find the complete branch data from restaurants list
@@ -2434,38 +2598,85 @@ const CompleteOffersAdmin = () => {
             </div>
         </div>
     );
+    const getCitiesFromOffer = (offer) => {
+        if (!offer.restaurantBranches) return [];
+        const cities = [...new Set(offer.restaurantBranches.map(rb => rb.cityName).filter(Boolean))];
+        return cities;
+    };
+    
+    const OfferCard = ({ offer }) => {
+        const getCitiesFromOffer = (offer) => {
+            if (!offer.restaurantBranches || offer.restaurantBranches.length === 0) return [];
+            const cities = [...new Set(offer.restaurantBranches
+                .map(rb => rb.cityName)
+                .filter(city => city && city.trim())
+            )];
+            return cities;
+        };
 
-    const OfferCard = ({ offer }) => (
-        <div className="p-4 rounded-lg border bg-white shadow-sm">
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-md bg-gray-100">{getOfferIcon(offer.offerType)}</div>
-                    <div>
-                        <h4 className="font-semibold">{offer.name}</h4>
-                        <p className="text-xs text-gray-500">{offer.offerType} • {offer.discountType}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                            {getOfferBadges(offer).map((b, i) => (
-                                <span key={i} className={`px-2 py-0.5 rounded text-xs ${b.color}`}>{b.text}</span>
-                            ))}
+        const cities = getCitiesFromOffer(offer);
+        const isOrderLevel = isOrderLevelOffer(offer);
+
+        return (
+            <div className="p-4 rounded-lg border bg-white shadow-sm">
+                <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-md bg-gray-100">{getOfferIcon(offer.offerType)}</div>
+                        <div>
+                            <h4 className="font-semibold">{offer.name}</h4>
+                            <p className="text-xs text-gray-500">
+                                {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
+                            </p>
+
+                            {/* CITY INDICATOR FOR ORDER-LEVEL OFFERS */}
+                            {isOrderLevel && cities.length > 0 && (
+                                <div className="mt-1">
+        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+            🏙️ {cities.length === 1
+            ? cities[0]
+            : `${cities.length} cities${cities.length <= 2 ? `: ${cities.join(', ')}` : ''}`
+        }
+        </span>
+                                </div>
+                            )}
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {getOfferBadges(offer).map((b, i) => (
+                                    <span key={i} className={`px-2 py-0.5 rounded text-xs ${b.color}`}>{b.text}</span>
+                                ))}
+                                {/* ADD CITY-WIDE BADGE */}
+                                {isOrderLevel && (
+                                    <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
+                                    CITY-WIDE
+                                </span>
+                                )}
+                            </div>
                         </div>
                     </div>
+                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(offer)}`}>
+                    {getStatusText(offer)}
+                </span>
                 </div>
-                <span className={`px-2 py-1 text-xs rounded ${getStatusColor(offer)}`}>{getStatusText(offer)}</span>
-            </div>
-            <div className="mt-3 flex items-center gap-3 text-sm text-gray-600">
-                <span>Priority: <b>{offer.priority ?? '-'}</b></span>
-                <span>Usage: <b>{offer.currentUsage ?? 0}</b>{offer.maxUsageTotal ? ` / ${offer.maxUsageTotal}` : ''}</span>
-                {offer.startDate && offer.endDate && (
-                    <span>{offer.startDate} → {offer.endDate}</span>
-                )}
-            </div>
-            <div className="mt-4 flex gap-2">
-                <button onClick={() => handleEdit(offer)} className="px-3 py-1.5 rounded border flex items-center gap-1"><Edit2 className="w-4 h-4"/> Edit</button>
-                <button onClick={() => handleDelete(offer.offerId)} className="px-3 py-1.5 rounded border flex items-center gap-1 text-red-600 border-red-300"><Trash2 className="w-4 h-4"/> Delete</button>
-            </div>
-        </div>
-    );
 
+                {/* EXISTING CARD CONTENT */}
+                <div className="mt-3 flex items-center gap-3 text-sm text-gray-600">
+                    <span>Priority: <b>{offer.priority ?? '-'}</b></span>
+                    <span>Usage: <b>{offer.currentUsage ?? 0}</b>{offer.maxUsageTotal ? ` / ${offer.maxUsageTotal}` : ''}</span>
+                    {offer.startDate && offer.endDate && (
+                        <span>{offer.startDate} → {offer.endDate}</span>
+                    )}
+                </div>
+                <div className="mt-4 flex gap-2">
+                    <button onClick={() => handleEdit(offer)} className="px-3 py-1.5 rounded border flex items-center gap-1">
+                        <Edit2 className="w-4 h-4"/> Edit
+                    </button>
+                    <button onClick={() => handleDelete(offer.offerId)} className="px-3 py-1.5 rounded border flex items-center gap-1 text-red-600 border-red-300">
+                        <Trash2 className="w-4 h-4"/> Delete
+                    </button>
+                </div>
+            </div>
+        );
+    };
     const renderSubTargetingSection = () => {
         if (![5, 6, 7].includes(formData.offerType)) return null;
 
@@ -3416,6 +3627,18 @@ const CompleteOffersAdmin = () => {
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold">Offers Admin</h1>
                 <div className="flex items-center gap-2">
+                    {activeTab === 'list' && (
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={showCityOnlyOffers}
+                                onChange={(e) => setShowCityOnlyOffers(e.target.checked)}
+                                className="rounded"
+                            />
+                            <span className="font-medium">City-wide offers only</span>
+                            <span className="text-gray-500">(Order level)</span>
+                        </label>
+                    )}
                     <button
                         onClick={() => setActiveTab('list')}
                         className={`px-3 py-1.5 rounded border ${activeTab==='list' ? 'bg-gray-100' : ''}`}
@@ -3439,11 +3662,36 @@ const CompleteOffersAdmin = () => {
 
             {/* Content */}
             {activeTab === 'list' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {offers.map(o => <OfferCard key={o.offerId} offer={o} />)}
-                    {offers.length === 0 && (
-                        <div className="col-span-full text-center text-gray-500 p-8 border rounded-lg">No offers yet</div>
+                <div className="space-y-4">
+                    {/* FILTER INFO */}
+                    {showCityOnlyOffers && (
+                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                            <div className="flex items-center gap-2">
+                                <span className="text-purple-800 font-medium">🏙️ Showing city-wide offers only</span>
+                                <span className="text-purple-600 text-sm">
+                        (Order-level offers that apply to entire cities)
+                    </span>
+                            </div>
+                        </div>
                     )}
+
+                    {/* OFFERS GRID */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {offers
+                            .filter(offer => {
+                                if (!showCityOnlyOffers) return true;
+                                return isOrderLevelOffer(offer);
+                            })
+                            .map(o => <OfferCard key={o.offerId} offer={o} />)}
+                        {offers.filter(offer => {
+                            if (!showCityOnlyOffers) return true;
+                            return isOrderLevelOffer(offer);
+                        }).length === 0 && (
+                            <div className="col-span-full text-center text-gray-500 p-8 border rounded-lg">
+                                {showCityOnlyOffers ? 'No city-wide offers found' : 'No offers yet'}
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : activeTab === 'test' ? (
                 renderEnhancedTestOrderTab()
