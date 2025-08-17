@@ -304,37 +304,53 @@ const CompleteOffersAdmin = () => {
     };
     const deselectAllRestaurantsInCity = (cityName) => {
         const cityRestaurants = getRestaurantsInCity(cityName);
+
+        if (!cityRestaurants || cityRestaurants.length === 0) {
+            console.log('No restaurants found for city:', cityName);
+            return;
+        }
+
         const cityBranches = cityRestaurants.map(r => ({
             restaurantId: r.id,
             branchId: r.branchId
         }));
 
-        // Remove city branches from existing selection
+        console.log('Deselecting city:', cityName);
+        console.log('City branches to remove:', cityBranches);
+        console.log('Current selected branches:', formData.RestaurantBranches);
+
         setFormData(prev => {
-            const updatedBranches = prev.RestaurantBranches.filter(selectedBranch =>
-                !cityBranches.some(cityBranch =>
+            // Filter out all branches from this city
+            const updatedBranches = prev.RestaurantBranches.filter(selectedBranch => {
+                const shouldRemove = cityBranches.some(cityBranch =>
                     cityBranch.restaurantId === selectedBranch.restaurantId &&
                     cityBranch.branchId === selectedBranch.branchId
-                )
-            );
+                );
+                return !shouldRemove; // Keep branches that should NOT be removed
+            });
 
+            console.log('Updated branches after deselect:', updatedBranches);
+
+            // Update restaurant IDs based on remaining branches
             const updatedRestaurantIds = [...new Set(updatedBranches.map(b => b.restaurantId))];
 
-            // Collapse restaurants that no longer have selected branches
-            const removedRestaurantIds = [...new Set(cityBranches.map(b => b.restaurantId))];
-            setExpandedRestaurants(prev =>
-                prev.filter(id => !removedRestaurantIds.includes(id) ||
-                    updatedBranches.some(b => b.restaurantId === id))
+            // Update expanded restaurants - collapse restaurants that no longer have selected branches
+            const cityRestaurantIds = [...new Set(cityBranches.map(b => b.restaurantId))];
+            setExpandedRestaurants(prevExpanded =>
+                prevExpanded.filter(restaurantId => {
+                    // Keep expanded only if restaurant still has selected branches
+                    const stillHasSelectedBranches = updatedBranches.some(b => b.restaurantId === restaurantId);
+                    return stillHasSelectedBranches;
+                })
             );
 
             return {
                 ...prev,
-                selectedBranches: updatedBranches,
+                RestaurantBranches: updatedBranches,
                 RestaurantIds: updatedRestaurantIds
             };
         });
-    };
-    
+    };    
     const getUniqueRestaurants = () => {
         // Group restaurants by ID to show each restaurant once
         const uniqueRestaurants = restaurants.reduce((acc, restaurant) => {
@@ -367,23 +383,49 @@ const CompleteOffersAdmin = () => {
 
     const selectAllRestaurantsInCity = (cityName) => {
         const cityRestaurants = getRestaurantsInCity(cityName);
+
+        if (!cityRestaurants || cityRestaurants.length === 0) {
+            console.log('No restaurants found for city:', cityName);
+            return;
+        }
+
         const cityBranches = cityRestaurants.map(r => ({
             restaurantId: r.id,
             branchId: r.branchId
         }));
 
-        // Add to existing selection
-        setFormData(prev => ({
-            ...prev,
-            RestaurantBranches: [...prev.RestaurantBranches, ...cityBranches],
-            RestaurantIds: [...new Set([...prev.RestaurantIds, ...cityRestaurants.map(r => r.id)])]
-        }));
+        console.log('Selecting all for city:', cityName);
+        console.log('City branches to add:', cityBranches);
 
-        // Auto-expand these restaurants
-        const restaurantIds = [...new Set(cityRestaurants.map(r => r.id))];
-        setExpandedRestaurants(prev => [...new Set([...prev, ...restaurantIds])]);
-    };
-    
+        setFormData(prev => {
+            // Add to existing selection (avoiding duplicates)
+            const existingBranches = prev.RestaurantBranches;
+            const newBranches = cityBranches.filter(newBranch =>
+                !existingBranches.some(existing =>
+                    existing.restaurantId === newBranch.restaurantId &&
+                    existing.branchId === newBranch.branchId
+                )
+            );
+
+            const updatedBranches = [...existingBranches, ...newBranches];
+            const updatedRestaurantIds = [...new Set(updatedBranches.map(b => b.restaurantId))];
+
+            console.log('New branches added:', newBranches);
+            console.log('Updated total branches:', updatedBranches);
+
+            // Auto-expand restaurants in this city
+            const cityRestaurantIds = [...new Set(cityRestaurants.map(r => r.id))];
+            setExpandedRestaurants(prevExpanded =>
+                [...new Set([...prevExpanded, ...cityRestaurantIds])]
+            );
+
+            return {
+                ...prev,
+                RestaurantBranches: updatedBranches,
+                RestaurantIds: updatedRestaurantIds
+            };
+        });
+    };    
     const toggleRestaurantExpansion = (restaurantId) => {
         setExpandedRestaurants(prev => {
             const isExpanded = prev.includes(restaurantId);
@@ -489,82 +531,87 @@ const CompleteOffersAdmin = () => {
                 </div>
             )}
             {/* City Quick Select */}
-            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-orange-800">Quick Select by City</h4>
-                    <button
-                        type="button"
-                        onClick={() => setShowCitySelector(!showCitySelector)}
-                        className="text-orange-600 text-sm"
-                    >
-                        {showCitySelector ? 'Hide' : 'Show'} Cities
-                    </button>
-                </div>
+            {(formData.offerType === 3 || formData.offerType === 4 ||
+                ([5, 6, 7, 9].includes(formData.offerType) && subOfferType === 'order')) && (
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-orange-800">Quick Select by City</h4>
+                        <button
+                            type="button"
+                            onClick={() => setShowCitySelector(!showCitySelector)}
+                            className="text-orange-600 text-sm"
+                        >
+                            {showCitySelector ? 'Hide' : 'Show'} Cities
+                        </button>
+                    </div>
 
-                {showCitySelector && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {getUniqueCities().map(city => {
-                            const cityRestaurants = getRestaurantsInCity(city);
-                            const totalBranches = cityRestaurants.length;
-                            const selectedBranches = cityRestaurants.filter(restaurant =>
-                                formData.RestaurantBranches.some(b =>
-                                    b.restaurantId === restaurant.id && b.branchId === restaurant.branchId
-                                )
-                            ).length;
+                    {showCitySelector && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {getUniqueCities().map(city => {
+                                const cityRestaurants = getRestaurantsInCity(city);
+                                const totalBranches = cityRestaurants.length;
+                                const selectedBranches = cityRestaurants.filter(restaurant =>
+                                    formData.RestaurantBranches.some(b =>
+                                        b.restaurantId === restaurant.id && b.branchId === restaurant.branchId
+                                    )
+                                ).length;
 
-                            const isFullySelected = selectedBranches === totalBranches && totalBranches > 0;
-                            const hasPartialSelection = selectedBranches > 0 && selectedBranches < totalBranches;
+                                const isFullySelected = selectedBranches === totalBranches && totalBranches > 0;
+                                const hasPartialSelection = selectedBranches > 0 && selectedBranches < totalBranches;
 
-                            return (
-                                <div key={city} className={`p-3 border rounded-lg ${
-                                    isFullySelected ? 'bg-green-50 border-green-300' :
-                                        hasPartialSelection ? 'bg-yellow-50 border-yellow-300' :
-                                            'bg-white border-gray-300'
-                                }`}>
-                                    <div className="text-center mb-2">
-                                        <div className="font-medium text-sm">📍 {city}</div>
-                                        <div className="text-xs text-gray-600">
-                                            {totalBranches} branches
-                                        </div>
-                                        {selectedBranches > 0 && (
-                                            <div className="text-xs font-medium text-blue-600">
-                                                {selectedBranches}/{totalBranches} selected
+                                return (
+                                    <div key={city} className={`p-3 border rounded-lg ${
+                                        isFullySelected ? 'bg-green-50 border-green-300' :
+                                            hasPartialSelection ? 'bg-yellow-50 border-yellow-300' :
+                                                'bg-white border-gray-300'
+                                    }`}>
+                                        <div className="text-center mb-2">
+                                            <div className="font-medium text-sm">📍 {city}</div>
+                                            <div className="text-xs text-gray-600">
+                                                {totalBranches} branches
                                             </div>
-                                        )}
-                                    </div>
+                                            {selectedBranches > 0 && (
+                                                <div className="text-xs font-medium text-blue-600">
+                                                    {selectedBranches}/{totalBranches} selected
+                                                </div>
+                                            )}
+                                        </div>
 
-                                    <div className="flex gap-1">
-                                        {/* SELECT ALL BUTTON */}
-                                        <button
-                                            type="button"
-                                            onClick={() => selectAllRestaurantsInCity(city)}
-                                            className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                                isFullySelected
-                                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                                                    : 'bg-orange-600 text-white hover:bg-orange-700'
-                                            }`}
-                                            disabled={isFullySelected}
-                                        >
-                                            {isFullySelected ? 'All Selected' : 'Select All'}
-                                        </button>
-
-                                        {/* DESELECT ALL BUTTON */}
-                                        {selectedBranches > 0 && (
+                                        <div className="flex gap-1">
+                                            {/* SELECT ALL BUTTON */}
                                             <button
                                                 type="button"
-                                                onClick={() => deselectAllRestaurantsInCity(city)}
-                                                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                onClick={() => selectAllRestaurantsInCity(city)}
+                                                className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                                    isFullySelected
+                                                        ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                                        : 'bg-orange-600 text-white hover:bg-orange-700'
+                                                }`}
+                                                disabled={isFullySelected}
                                             >
-                                                Deselect
+                                                {isFullySelected ? 'All Selected' : 'Select All'}
                                             </button>
-                                        )}
+
+                                            {/* DESELECT ALL BUTTON */}
+                                            {selectedBranches > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => deselectAllRestaurantsInCity(city)}
+                                                    className="flex-1 px-2 py-1 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                >
+                                                    Deselect
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            
             {/* Restaurant and branch list */}
             {restaurants.length === 0 ? (
                 <div className="border rounded-md p-4 text-center text-gray-500">
@@ -2599,8 +2646,11 @@ const CompleteOffersAdmin = () => {
         </div>
     );
     const getCitiesFromOffer = (offer) => {
-        if (!offer.restaurantBranches) return [];
-        const cities = [...new Set(offer.restaurantBranches.map(rb => rb.cityName).filter(Boolean))];
+        if (!offer.restaurantBranches || offer.restaurantBranches.length === 0) return [];
+        const cities = [...new Set(offer.restaurantBranches
+            .map(rb => rb.cityName)
+            .filter(city => city && typeof city === 'string' && city.trim())
+        )];
         return cities;
     };
     
@@ -2632,10 +2682,12 @@ const CompleteOffersAdmin = () => {
                             {isOrderLevel && cities.length > 0 && (
                                 <div className="mt-1">
         <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-            🏙️ {cities.length === 1
+            🏙️ {String(cities.length === 1
             ? cities[0]
-            : `${cities.length} cities${cities.length <= 2 ? `: ${cities.join(', ')}` : ''}`
-        }
+            : cities.length <= 2
+                ? cities.join(', ')
+                : `${cities.length} cities`
+        )}
         </span>
                                 </div>
                             )}
