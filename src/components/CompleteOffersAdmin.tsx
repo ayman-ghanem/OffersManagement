@@ -56,18 +56,7 @@ const CompleteOffersAdmin = () => {
         RestaurantIds: [],
         Targets: []
     });
-
-    /*const offerTypes = [
-        { value: 'Product', label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products' },
-        { value: 'Category', label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories' },
-        { value: 'Order', label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order' },
-        { value: 'Delivery', label: 'Delivery', icon: <MapPin className="w-4 h-4" />, description: 'Discount on delivery fee' },
-        { value: 'FirstOrder', label: 'First Order', icon: <Users className="w-4 h-4" />, description: 'New customer specials' },
-        { value: 'LoyaltyTier', label: 'Loyalty Tier', icon: <Award className="w-4 h-4" />, description: 'VIP customer rewards' },
-        { value: 'TimeSlot', label: 'Time-Based', icon: <Clock className="w-4 h-4" />, description: 'Happy hour, weekend specials' },
-        { value: 'Combo', label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers' },
-        { value: 'Flash', label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers' }
-    ];*/
+    
     const offerTypes = [
         { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products' },
         { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories' },
@@ -79,12 +68,6 @@ const CompleteOffersAdmin = () => {
         { value: 8, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers with restaurant-specific items' },
         { value: 9, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers' }
     ];
-    /*const discountTypes = [
-        { value: 'Percentage', label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
-        { value: 'Fixed', label: 'Fixed Amount (شيقل)', icon: <DollarSign className="w-4 h-4" /> },
-        { value: 'BuyXGetY', label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> },
-        { value: 'FreeDelivery', label: 'Free Delivery', icon: <MapPin className="w-4 h-4" /> }
-    ];*/
 
     const discountTypes = [
         { value: 1, label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
@@ -475,11 +458,6 @@ const CompleteOffersAdmin = () => {
         return filtered;
     };
 
-    const calculateEnhancedOrderTotal = () => {
-        const subtotal = enhancedOrderItems.reduce((sum, item) => sum + item.total, 0);
-        return subtotal + enhancedTestConfig.deliveryFee;
-    };
-
     const getApplicableOffers = () => {
         if (!enhancedTestConfig.restaurantId) return offers;
         return offers.filter(offer =>
@@ -514,8 +492,8 @@ const CompleteOffersAdmin = () => {
     const [selectedProductRestaurants, setSelectedProductRestaurants] = useState([]);
     const [subOfferType, setSubOfferType] = useState('order'); // 'product', 'category', 'order'
     const [comboTargetType, setComboTargetType] = useState('Product'); // 'product' or 'category'
-
-// Add these functions to your admin component
+   
+    // Add these functions to your admin component
     const loadRestaurants = async () => {
         try {
             const loadRestaurantsurl = API_BASE_URL.concat('/api/admin/OffersManagement/restaurants');
@@ -529,10 +507,6 @@ const CompleteOffersAdmin = () => {
 
     const loadProducts = async (restaurantIds = null, categoryId = null) => {
         try {
-            // If called without parameters during edit, load all
-            if (!restaurantIds && !categoryId) {
-                return loadAllProducts();
-            }
 
             if (restaurantIds && Array.isArray(restaurantIds)) {
                 await loadProductsForRestaurants(restaurantIds);
@@ -563,13 +537,8 @@ const CompleteOffersAdmin = () => {
         }
     };
 
-// 5. UPDATE your existing loadCategories function to handle the fallback case
     const loadCategories = async (restaurantIds = null) => {
         try {
-            // If called without parameters during edit, load all
-            if (!restaurantIds) {
-                return loadAllCategories();
-            }
 
             if (restaurantIds && Array.isArray(restaurantIds)) {
                 await loadCategoriesForRestaurants(restaurantIds);
@@ -629,7 +598,6 @@ const CompleteOffersAdmin = () => {
         }
     };
 
-// Update your loadProductsForRestaurants to avoid duplicates better:
     const loadProductsForRestaurants = async (restaurantIds) => {
         try {
             console.log('Loading products for restaurants:', restaurantIds);
@@ -660,25 +628,7 @@ const CompleteOffersAdmin = () => {
             console.error('Error loading products for restaurants:', error);
         }
     };
-    const handleRestaurantSelection = (restaurantId) => {
-        setSelectedRestaurantForTargeting(restaurantId);
-
-        // Clear previously selected products/categories when restaurant changes
-        setFormData(prev => ({
-            ...prev,
-            Targets: []
-        }));
-
-        // Load products/categories for the selected restaurant
-        if (restaurantId) {
-            loadCategories(restaurantId);
-            loadProducts(restaurantId);
-        } else {
-            loadCategories();
-            loadProducts();
-        }
-    };
-
+   
     const getFilteredRestaurants = () => {
         if (!restaurantSearch) return restaurants;
         return restaurants.filter(restaurant =>
@@ -723,46 +673,7 @@ const CompleteOffersAdmin = () => {
             };
         });
     };
-
-    const getFilteredProductRestaurants = () => {
-        if (!productRestaurantSearch) return restaurants;
-        return restaurants.filter(restaurant =>
-            restaurant.name.toLowerCase().includes(productRestaurantSearch.toLowerCase()) ||
-            (restaurant.nameEn && restaurant.nameEn.toLowerCase().includes(productRestaurantSearch.toLowerCase()))
-        );
-    };
-
-    const toggleProductRestaurantSelection = async (restaurantId) => {
-        setSelectedProductRestaurants(prev => {
-            const isSelected = prev.includes(restaurantId);
-            const newSelection = isSelected
-                ? prev.filter(id => id !== restaurantId)
-                : [...prev, restaurantId];
-
-            console.log('New restaurant selection:', newSelection);
-
-            // SYNC: Update RestaurantIds in formData
-            setFormData(prevForm => ({
-                ...prevForm,
-                RestaurantIds: newSelection,
-                // Clear targets when restaurant selection changes (unless editing)
-                Targets: editingOffer ? prevForm.Targets : []
-            }));
-
-            // Load products/categories for the new selection
-            if (newSelection.length > 0) {
-                loadCategoriesForRestaurants(newSelection);
-                loadProductsForRestaurants(newSelection);
-            } else {
-                loadCategories();
-                loadProducts();
-            }
-
-            return newSelection;
-        });
-    };
-
-
+    
     const getFilteredProductsByRestaurants = () => {
         console.log('🔍 === FILTERING PRODUCTS/CATEGORIES ===');
         console.log('✏️ Editing offer:', editingOffer?.offerId);
@@ -1095,7 +1006,6 @@ const CompleteOffersAdmin = () => {
         }
     }, [formData.offerType, formData.RestaurantIds, subOfferType]); // Add subOfferType to dependencies
 
-    // 1. ADD a useEffect to load data when combo target type changes or restaurants change for combo offers
     useEffect(() => {
         console.log('🔄 === USEEFFECT: Combo Data Loading ===');
         console.log('📝 Current offer type:', formData.offerType);
@@ -1263,209 +1173,7 @@ const CompleteOffersAdmin = () => {
         loadCategories();
         loadProducts();
     };
-
-    // Update the close modal handlers to properly reset
-    const closeModal = () => {
-        setShowCreateModal(false);
-        setEditingOffer(null);
-        resetForm();
-    };
-    const handleTestOrder = async () => {
-        if (!testOrderData.restaurantId) {
-            alert('Please select a restaurant first');
-            return;
-        }
-
-        setTestingOffer('all');
-        setTestResults([]);
-
-        try {
-            // Test all active offers
-            const activeOffers = offers.filter(offer => offer.isActive);
-            const results = [];
-
-            for (const offer of activeOffers) {
-                try {
-                    const testUrl = API_BASE_URL.concat('/api/admin/OffersManagement/test');
-                    const response = await fetch(testUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            offerId: offer.offerId,
-                            userId: testOrderData.userId,
-                            restaurantId: testOrderData.restaurantId,
-                            items: testOrderData.items,
-                            deliveryFee: testOrderData.deliveryFee,
-                            couponCode: testOrderData.couponCode
-                        })
-                    });
-
-                    const result = await response.json();
-                    results.push({
-                        offer: offer,
-                        result: result,
-                        success: response.ok
-                    });
-                } catch (error) {
-                    results.push({
-                        offer: offer,
-                        result: { isApplicable: false, message: 'Test failed: ' + error.message },
-                        success: false
-                    });
-                }
-            }
-
-            setTestResults(results);
-        } catch (error) {
-            console.error('Error testing offers:', error);
-        } finally {
-            setTestingOffer(null);
-        }
-    };
-
-    const updateTestOrderItem = (index, field, value) => {
-        setTestOrderData(prev => ({
-            ...prev,
-            items: prev.items.map((item, i) =>
-                i === index ? { ...item, [field]: value } : item
-            )
-        }));
-    };
-
-    const addTestOrderItem = () => {
-        setTestOrderData(prev => ({
-            ...prev,
-            items: [...prev.items, {
-                productId: '',
-                categoryId: '',
-                price: 0,
-                quantity: 1,
-                total: 0
-            }]
-        }));
-    };
-
-    const removeTestOrderItem = (index) => {
-        setTestOrderData(prev => ({
-            ...prev,
-            items: prev.items.filter((_, i) => i !== index)
-        }));
-    };
-    const loadAllProducts = async () => {
-        try {
-            const loadProductsUrl = `${API_BASE_URL}/api/admin/OffersManagement/products`;
-            console.log('📦 Loading ALL products from:', loadProductsUrl);
-
-            const response = await fetch(loadProductsUrl);
-            const data = await response.json();
-
-            const productsWithRestaurantId = data.map(product => ({
-                ...product,
-                restaurantId: product.restaurantId || 'unknown'
-            }));
-
-            console.log('✅ Loaded ALL products:', productsWithRestaurantId.length);
-            console.log('Sample products:', productsWithRestaurantId.slice(0, 3));
-            setProducts(productsWithRestaurantId);
-
-            return productsWithRestaurantId;
-        } catch (error) {
-            console.error('❌ Error loading all products:', error);
-            return [];
-        }
-    };
-
-    const loadAllCategories = async () => {
-        try {
-            const loadCategoriesUrl = `${API_BASE_URL}/api/admin/OffersManagement/categories`;
-            console.log('📋 Loading ALL categories from:', loadCategoriesUrl);
-
-            const response = await fetch(loadCategoriesUrl);
-            const data = await response.json();
-
-            const categoriesWithRestaurantId = data.map(category => ({
-                ...category,
-                restaurantId: category.restaurantId || 'unknown'
-            }));
-
-            console.log('✅ Loaded ALL categories:', categoriesWithRestaurantId.length);
-            console.log('Sample categories:', categoriesWithRestaurantId.slice(0, 3));
-            setCategories(categoriesWithRestaurantId);
-
-            return categoriesWithRestaurantId;
-        } catch (error) {
-            console.error('❌ Error loading all categories:', error);
-            return [];
-        }
-    };
-
-    const findRestaurantsForTargetsSync = (targetIds, offerType) => {
-        console.log('🔍 === FINDING RESTAURANTS FOR TARGETS ===');
-        console.log('🎯 Target IDs:', targetIds);
-        console.log('📝 Offer Type:', offerType);
-
-        // Get current products/categories from state
-        const currentProducts = products;
-        const currentCategories = categories;
-
-        console.log('📦 Available products:', currentProducts.length);
-        console.log('📋 Available categories:', currentCategories.length);
-
-        const items = offerType === 1 ? currentProducts : currentCategories;
-        console.log(`🔎 Using ${items.length} ${offerType === 1 ? 'products' : 'categories'} for search`);
-
-        if (!items || items.length === 0) {
-            console.log('❌ No items available for search!');
-            console.log('Current state - Products:', currentProducts.length, 'Categories:', currentCategories.length);
-            return [];
-        }
-
-        const restaurantIds = new Set();
-        const foundItems = [];
-        const notFoundItems = [];
-
-        targetIds.forEach(targetId => {
-            console.log(`🔍 Looking for target: ${targetId}`);
-            const item = items.find(item => item.id === targetId);
-
-            if (item) {
-                foundItems.push(item);
-                console.log(`✅ Found item: ${item.name} (ID: ${item.id})`);
-
-                if (item.restaurantId) {
-                    restaurantIds.add(item.restaurantId);
-                    console.log(`🏪 Target ${targetId} → restaurant ${item.restaurantId}`);
-                } else {
-                    console.log(`⚠️ Target ${targetId} found but missing restaurantId`);
-                }
-            } else {
-                notFoundItems.push(targetId);
-                console.log(`❌ Target ${targetId} NOT FOUND`);
-            }
-        });
-
-        console.log('📊 Search Results:');
-        console.log('✅ Found items:', foundItems.length);
-        console.log('❌ Not found items:', notFoundItems.length);
-
-        if (notFoundItems.length > 0) {
-            console.log('🔍 Available item IDs (first 10):', items.slice(0, 10).map(i => i.id));
-        }
-
-        const result = Array.from(restaurantIds);
-        console.log('🎯 Final restaurant IDs:', result);
-
-        // Log restaurant names
-        result.forEach(restId => {
-            const restaurant = restaurants.find(r => r.id === restId);
-            console.log(`🏪 Restaurant ${restId}: ${restaurant?.name || 'Unknown'}`);
-        });
-
-        return result;
-    };
+   
     const handleEdit = async (offer) => {
         try {
             console.log('=== STARTING EDIT PROCESS ===');
@@ -1674,60 +1382,7 @@ const CompleteOffersAdmin = () => {
             return null;
         }
     };
-
-// Improved function to find restaurants for target items
-    const findRestaurantsForTargetItems = async (
-        targetIds: string[],
-        offerType: number
-    ): Promise<string[]> => {
-        return new Promise<string[]>((resolve) => {
-            setTimeout(() => {
-                const items = offerType === 1 ? products : categories;
-                const restaurantIds = new Set<string>();
-
-                console.log('=== FINDING RESTAURANTS FOR TARGETS ===');
-                console.log('Target IDs:', targetIds);
-                console.log('Offer Type:', offerType);
-                console.log('Available items:', items.length);
-
-                targetIds.forEach(targetId => {
-                    const item = items.find(item => item.id === targetId);
-                    if (item && item.restaurantId) {
-                        restaurantIds.add(item.restaurantId);
-                        console.log(`Target ${targetId} (${item.name}) found in restaurant ${item.restaurantId}`);
-                    } else {
-                        console.log(`Target ${targetId} not found or missing restaurantId`);
-                    }
-                });
-
-                const result = Array.from(restaurantIds);
-                console.log('Final restaurant IDs:', result);
-                resolve(result);
-            }, 100);
-        });
-    };
-
-    const findRestaurantsForTargets = (targetIds, offerType) => {
-        const items = offerType === 1 ? products : categories;
-        const restaurantIds = new Set();
-
-        console.log('Finding restaurants for targets:', targetIds);
-        console.log('Searching in items:', items.length);
-
-        targetIds.forEach(targetId => {
-            const item = items.find(item => item.id === targetId);
-            if (item && item.restaurantId) {
-                restaurantIds.add(item.restaurantId);
-                console.log(`Target ${targetId} found in restaurant ${item.restaurantId}`);
-            } else {
-                console.log(`Target ${targetId} not found or missing restaurantId`);
-            }
-        });
-
-        return Array.from(restaurantIds);
-    };
-
-
+    
     const handleDelete = async (offerId) => {
         if (window.confirm('Are you sure you want to delete this offer?')) {
             try {
