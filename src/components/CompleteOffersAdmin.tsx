@@ -13,7 +13,12 @@ const CompleteOffersAdmin = () => {
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
     const [selectedRestaurantFilter, setSelectedRestaurantFilter] = useState('');
+    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
     const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+
+    const [RestaurantBranches, setRestaurantBranches] = useState([]); // Array of {restaurantId, branchId}
+    const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
+    const [selectedBranches, setSelectedBranches] = useState([]);
 
     // Complete form state for ALL offer types
     const [formData, setFormData] = useState({
@@ -54,6 +59,8 @@ const CompleteOffersAdmin = () => {
 
         // Targeting
         RestaurantIds: [],
+        RestaurantBranches: [], // Add this
+
         Targets: []
     });
     
@@ -82,6 +89,7 @@ const CompleteOffersAdmin = () => {
         selectedOffers: [],
         userId: 'test-user-123',
         restaurantId: '',
+        branchId: '',
         deliveryFee: 3.00,
         couponCode: '',
         testMode: 'single' // 'single' or 'multiple'
@@ -188,10 +196,16 @@ const CompleteOffersAdmin = () => {
             return;
         }
 
+        if (!enhancedTestConfig.branchId) {
+            alert('Please select a branch first');
+            return;
+        }
+
         if (enhancedOrderItems.length === 0) {
             alert('Please add items to test');
             return;
         }
+
 
         setStackingTestLoading(true);
         setStackingTestResults(null);
@@ -202,6 +216,8 @@ const CompleteOffersAdmin = () => {
             const testData = {
                 userId: enhancedTestConfig.userId,
                 restaurantId: enhancedTestConfig.restaurantId,
+                branchId: enhancedTestConfig.branchId,
+
                 items: enhancedOrderItems.map(item => ({
                     productId: item.productId,
                     categoryId: item.categoryId || '',
@@ -269,9 +285,246 @@ const CompleteOffersAdmin = () => {
         }));
     };
 
+    const getUniqueRestaurants = () => {
+        // Group restaurants by ID to show each restaurant once
+        const uniqueRestaurants = restaurants.reduce((acc, restaurant) => {
+            const existing = acc.find(r => r.id === restaurant.id);
+            if (!existing) {
+                acc.push({
+                    id: restaurant.id,
+                    name: restaurant.name,
+                    nameEn: restaurant.nameEn,
+                    branches: restaurants.filter(r => r.id === restaurant.id)
+                });
+            }
+            return acc;
+        }, []);
+        return uniqueRestaurants;
+    };
+    const getBranchesForRestaurant = (restaurantId) => {
+        return restaurants.filter(r => r.id === restaurantId);
+    };
+
+    const toggleRestaurantExpansion = (restaurantId) => {
+        setExpandedRestaurants(prev => {
+            const isExpanded = prev.includes(restaurantId);
+            if (isExpanded) {
+                // Collapsing - remove all branches for this restaurant
+                setFormData(prevForm => ({
+                    ...prevForm,
+                    RestaurantBranches: prevForm.RestaurantBranches.filter(
+                        b => b.restaurantId !== restaurantId
+                    ),
+                    RestaurantIds: prevForm.RestaurantIds.filter(id => id !== restaurantId)
+                }));
+                return prev.filter(id => id !== restaurantId);
+            } else {
+                // Expanding
+                return [...prev, restaurantId];
+            }
+        });
+    };
+
+    const toggleBranchSelection = (restaurantId, branchId) => {
+        setFormData(prev => {
+            const isSelected = prev.RestaurantBranches.some(
+                b => b.restaurantId === restaurantId && b.branchId === branchId
+            );
+
+            let newRestaurantBranches;
+            if (isSelected) {
+                // Remove branch
+                newRestaurantBranches = prev.RestaurantBranches.filter(
+                    b => !(b.restaurantId === restaurantId && b.branchId === branchId)
+                );
+            } else {
+                // Add branch
+                newRestaurantBranches = [...prev.RestaurantBranches, { restaurantId, branchId }];
+            }
+
+            // Update RestaurantIds to include only restaurants that have selected branches
+            const newRestaurantIds = [...new Set(newRestaurantBranches.map(b => b.restaurantId))];
+
+            // Load data for new restaurant selection
+            if (newRestaurantIds.length > 0) {
+                loadCategoriesForRestaurants(newRestaurantIds);
+                loadProductsForRestaurants(newRestaurantIds);
+            } else {
+                loadCategories();
+                loadProducts();
+            }
+
+            return {
+                ...prev,
+                RestaurantBranches: newRestaurantBranches,
+                RestaurantIds: newRestaurantIds
+            };
+        });
+    };
+
+    const isBranchSelected = (restaurantId, branchId) => {
+        return formData.RestaurantBranches.some(
+            b => b.restaurantId === restaurantId && b.branchId === branchId
+        );
+    };
+
+    const renderRestaurantBranchSelection = () => (
+        <div>
+            <label className="block text-sm font-medium mb-2">Select Restaurants & Branches</label>
+
+            {/* Search bar */}
+            <div className="mb-3">
+                <input
+                    type="text"
+                    placeholder="Search restaurants..."
+                    value={restaurantSearch}
+                    onChange={(e) => setRestaurantSearch(e.target.value)}
+                    className="w-full p-2 border rounded-md text-sm"
+                />
+            </div>
+
+            {/* Selected summary */}
+            {formData.RestaurantBranches.length > 0 && (
+                <div className="mb-3 p-3 bg-blue-50 rounded-md">
+                    <p className="text-sm font-medium text-blue-800 mb-2">
+                        Selected: {formData.RestaurantIds.length} restaurants, {formData.RestaurantBranches.length} branches
+                    </p>
+                    <div className="space-y-1">
+                        {formData.RestaurantIds.map(restaurantId => {
+                            const restaurant = getUniqueRestaurants().find(r => r.id === restaurantId);
+                            const RestaurantBranches = getRestaurantBranchesForRestaurant(restaurantId);
+                            const totalBranches = getBranchesForRestaurant(restaurantId).length;
+
+                            return (
+                                <div key={restaurantId} className="text-xs">
+                                <span className="font-medium text-blue-700">
+                                    {restaurant?.name || 'Unknown'}: 
+                                </span>
+                                    <span className="text-blue-600 ml-1">
+                                    {RestaurantBranches.length} of {totalBranches} branches
+                                </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Restaurant and branch list */}
+            {restaurants.length === 0 ? (
+                <div className="border rounded-md p-4 text-center text-gray-500">
+                    <p>Loading restaurants...</p>
+                </div>
+            ) : (
+                <div className="border rounded-md max-h-96 overflow-y-auto">
+                    {getUniqueRestaurants()
+                        .filter(restaurant =>
+                            !restaurantSearch ||
+                            restaurant.name.toLowerCase().includes(restaurantSearch.toLowerCase()) ||
+                            (restaurant.nameEn && restaurant.nameEn.toLowerCase().includes(restaurantSearch.toLowerCase()))
+                        )
+                        .map(restaurant => {
+                            const isExpanded = isRestaurantExpanded(restaurant.id);
+                            const RestaurantBranches = getRestaurantBranchesForRestaurant(restaurant.id);
+                            const totalBranches = restaurant.branches.length;
+
+                            return (
+                                <div key={restaurant.id} className="border-b">
+                                    {/* Restaurant Header */}
+                                    <div
+                                        className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                                            RestaurantBranches.length > 0 ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'bg-gray-50'
+                                        }`}
+                                        onClick={() => toggleRestaurantExpansion(restaurant.id)}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`transform transition-transform ${
+                                                    isExpanded ? 'rotate-90' : 'rotate-0'
+                                                }`}>
+                                                    ▶
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">{restaurant.name}</span>
+                                                    <span className="text-sm text-gray-500 ml-2">
+                                                    ({totalBranches} branch{totalBranches !== 1 ? 'es' : ''})
+                                                </span>
+                                                </div>
+                                            </div>
+                                            {RestaurantBranches.length > 0 && (
+                                                <span className="text-xs text-blue-600 font-medium bg-blue-100 px-2 py-1 rounded">
+                                                {RestaurantBranches.length} selected
+                                            </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Branches (shown only when expanded) */}
+                                    {isExpanded && (
+                                        <div className="bg-white border-l-4 border-l-gray-200">
+                                            {restaurant.branches.map(branch => (
+                                                <div
+                                                    key={branch.branchId}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleBranchSelection(restaurant.id, branch.branchId);
+                                                    }}
+                                                    className={`p-3 border-b cursor-pointer hover:bg-gray-50 transition-colors ml-6 ${
+                                                        isBranchSelected(restaurant.id, branch.branchId)
+                                                            ? 'bg-green-50 border-green-200'
+                                                            : ''
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isBranchSelected(restaurant.id, branch.branchId)}
+                                                                onChange={() => toggleBranchSelection(restaurant.id, branch.branchId)}
+                                                                className="rounded"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            <div>
+                                                            <span className="text-sm font-medium">
+                                                                {branch.branchName || 'Main Branch'}
+                                                            </span>
+                                                                {branch.cityName && (
+                                                                    <span className="text-xs text-gray-500 block">
+                                                                    📍 {branch.cityName}
+                                                                </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {isBranchSelected(restaurant.id, branch.branchId) && (
+                                                            <Check className="w-4 h-4 text-green-600" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                </div>
+            )}
+        </div>
+    );
+    const getRestaurantBranchesForRestaurant = (restaurantId) => {
+        return formData.RestaurantBranches.filter(b => b.restaurantId === restaurantId);
+    };
+
+    const isRestaurantExpanded = (restaurantId) => {
+        return expandedRestaurants.includes(restaurantId);
+    };
     const runEnhancedTests = async () => {
         if (!enhancedTestConfig.restaurantId) {
             alert('Please select a restaurant first');
+            return;
+        }
+
+        if (!enhancedTestConfig.branchId) {
+            alert('Please select a branch first');
             return;
         }
 
@@ -287,6 +540,7 @@ const CompleteOffersAdmin = () => {
             const testData = {
                 userId: enhancedTestConfig.userId,
                 restaurantId: enhancedTestConfig.restaurantId,
+                branchId: enhancedTestConfig.branchId,
                 items: enhancedOrderItems.map(item => ({
                     productId: item.productId,
                     categoryId: item.categoryId || '',
@@ -317,7 +571,13 @@ const CompleteOffersAdmin = () => {
                 const results = [];
                 const offersToTest = enhancedTestConfig.selectedOffers.length > 0
                     ? offers.filter(o => enhancedTestConfig.selectedOffers.includes(o.offerId))
-                    : offers.filter(o => o.restaurantIds?.includes(enhancedTestConfig.restaurantId));
+                    : offers.filter(o =>
+                        o.restaurantIds?.includes(enhancedTestConfig.restaurantId) &&
+                        o.restaurantBranches?.some(rb =>
+                            rb.id === enhancedTestConfig.restaurantId &&
+                            rb.branchId === enhancedTestConfig.branchId
+                        )
+                    );
 
                 for (const offer of offersToTest) {
                     try {
@@ -460,10 +720,24 @@ const CompleteOffersAdmin = () => {
 
     const getApplicableOffers = () => {
         if (!enhancedTestConfig.restaurantId) return offers;
-        return offers.filter(offer =>
-            offer.restaurantIds?.includes(enhancedTestConfig.restaurantId) ||
-            offer.restaurantIds?.length === 0
-        );
+
+        return offers.filter(offer => {
+            // Check if offer applies to the selected restaurant
+            const appliesToRestaurant = offer.restaurantIds?.includes(enhancedTestConfig.restaurantId) ||
+                offer.restaurantIds?.length === 0;
+
+            if (!appliesToRestaurant) return false;
+
+            // If branch is selected, check if offer applies to the specific branch
+            if (enhancedTestConfig.branchId && offer.restaurantBranches?.length > 0) {
+                return offer.restaurantBranches.some(rb =>
+                    rb.id === enhancedTestConfig.restaurantId &&
+                    rb.branchId === enhancedTestConfig.branchId
+                );
+            }
+
+            return true;
+        });
     };
 
     const [testOrderData, setTestOrderData] = useState({
@@ -1061,8 +1335,24 @@ const CompleteOffersAdmin = () => {
                 maxUsageTotal: formData.maxUsageTotal ? parseInt(formData.maxUsageTotal) : null,
                 minItemQuantity: formData.minItemQuantity ? parseInt(formData.minItemQuantity) : null,
                 flashSaleQuantity: formData.flashSaleQuantity ? parseInt(formData.flashSaleQuantity) : null,
-                
-                
+
+                // With this complete branch data:
+                RestaurantBranches: formData.RestaurantBranches.map(selectedBranch => {
+                    // Find the complete branch data from restaurants list
+                    const branchData = restaurants.find(r =>
+                        r.id === selectedBranch.restaurantId &&
+                        r.branchId === selectedBranch.branchId
+                    );
+
+                    return {
+                        Id: selectedBranch.restaurantId,
+                        BranchId: selectedBranch.branchId,
+                        Name: branchData?.name || '',
+                        NameEn: branchData?.nameEn || '',
+                        BranchName: branchData?.branchName || 'Main Branch',
+                        CityName: branchData?.cityName || ''
+                    };
+                }),
                 // Format restaurant IDs
                 //RestaurantIds: formData.RestaurantIds,
 
@@ -1143,6 +1433,16 @@ const CompleteOffersAdmin = () => {
         }
     };
 
+    const mapBranchesToRestaurantFormat = (restaurantBranches) => {
+        return restaurantBranches.map(rb => ({
+            id: rb.id,
+            branchId: rb.branchId,
+            name: rb.name || '',
+            nameEn: rb.nameEn || '',
+            branchName: rb.branchName || 'Main Branch',
+            cityName: rb.cityName || ''
+        }));
+    };
     const resetForm = () => {
         setFormData({
             name: '', nameEn: '', description: '', descriptionEn: '',
@@ -1153,7 +1453,7 @@ const CompleteOffersAdmin = () => {
             isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
             endTime: null, minItemQuantity: '', isComboOffer: false, comboItems: [],
             couponCode: '', requiresCouponCode: false, flashSaleQuantity: '',
-            RestaurantIds: [], Targets: []
+            RestaurantIds: [], RestaurantBranches: [], Targets: []
         });
 
         // Reset all search filters
@@ -1214,6 +1514,62 @@ const CompleteOffersAdmin = () => {
             console.log('🎯 Determined initial sub-offer type:', initialSubOfferType);
             setSubOfferType(initialSubOfferType);
 
+            // FIXED: Handle branches properly for editing
+            let selectedBranches = [];
+            if (offerDetail.restaurantBranches && offerDetail.restaurantBranches.length > 0) {
+                // Map branches to selectedBranches format
+                selectedBranches = offerDetail.restaurantBranches.map(rb => ({
+                    restaurantId: rb.id,
+                    branchId: rb.branchId
+                }));
+
+                // If branch data is incomplete (nulls), try to merge with current restaurants data
+                const completeRestaurantBranches = offerDetail.restaurantBranches.map(rb => {
+                    const existingBranch = restaurants.find(r =>
+                        r.id === rb.id && r.branchId === rb.branchId
+                    );
+
+                    if (existingBranch) {
+                        // Use existing data if available
+                        return existingBranch;
+                    } else {
+                        // Create minimal branch data
+                        return {
+                            id: rb.id,
+                            branchId: rb.branchId,
+                            name: rb.name || 'Unknown Restaurant',
+                            nameEn: rb.nameEn || '',
+                            branchName: rb.branchName || 'Main Branch',
+                            cityName: rb.cityName || ''
+                        };
+                    }
+                });
+
+                // Add these branches to restaurants if they don't exist
+                const newRestaurants = [...restaurants];
+                completeRestaurantBranches.forEach(branch => {
+                    const exists = newRestaurants.some(r =>
+                        r.id === branch.id && r.branchId === branch.branchId
+                    );
+                    if (!exists) {
+                        newRestaurants.push(branch);
+                    }
+                });
+
+                // Update restaurants state if we added new ones
+                if (newRestaurants.length > restaurants.length) {
+                    setRestaurants(newRestaurants);
+                }
+            }
+
+            console.log('🌿 Converted branches:', selectedBranches);
+
+
+            // Set restaurants to expanded state if they have selected branches
+            const restaurantsToExpand = [...new Set(selectedBranches.map(b => b.restaurantId))];
+            setExpandedRestaurants(restaurantsToExpand);
+            
+            
             // STEP 2: Set form data
             const formDataToSet = {
                 // Basic Information
@@ -1269,6 +1625,7 @@ const CompleteOffersAdmin = () => {
 
                 // Targeting
                 RestaurantIds: offerDetail.restaurantIds || [],
+                RestaurantBranches: selectedBranches || [],
                 Targets: offerDetail.targets?.map(t => t.targetId) || []
             };
 
@@ -1341,7 +1698,107 @@ const CompleteOffersAdmin = () => {
         }
     };
 
+    const renderTestConfiguration = () => (
+        <div className="bg-white rounded-lg border p-6">
+            <h3 className="text-lg font-semibold mb-4">Enhanced Test Configuration</h3>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label className="block text-sm font-medium mb-1">User ID</label>
+                    <input
+                        type="text"
+                        value={enhancedTestConfig.userId}
+                        onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, userId: e.target.value }))}
+                        className="w-full p-2 border rounded-md"
+                        placeholder="test-user-123"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Restaurant</label>
+                    <select
+                        value={enhancedTestConfig.restaurantId}
+                        onChange={(e) => {
+                            const newRestaurantId = e.target.value;
+                            setEnhancedTestConfig(prev => ({
+                                ...prev,
+                                restaurantId: newRestaurantId,
+                                branchId: '' // Reset branch when restaurant changes
+                            }));
+
+                            if (newRestaurantId) {
+                                loadItemsForRestaurant(newRestaurantId);
+                            } else {
+                                setAvailableItems([]);
+                            }
+                        }}
+                        className="w-full p-2 border rounded-md"
+                    >
+                        <option value="">Select Restaurant</option>
+                        {getUniqueRestaurants().map(restaurant => (
+                            <option key={restaurant.id} value={restaurant.id}>
+                                {restaurant.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {enhancedTestConfig.restaurantId && (
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Branch *</label>
+                        <select
+                            value={enhancedTestConfig.branchId}
+                            onChange={(e) => setEnhancedTestConfig(prev => ({
+                                ...prev,
+                                branchId: e.target.value
+                            }))}
+                            className="w-full p-2 border rounded-md"
+                            required
+                        >
+                            <option value="">Select Branch</option>
+                            {getBranchesForRestaurant(enhancedTestConfig.restaurantId).map(branch => (
+                                <option key={branch.branchId} value={branch.branchId}>
+                                    {branch.branchName || 'Main Branch'}
+                                    {branch.cityName && ` - ${branch.cityName}`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Delivery Fee (شيقل)</label>
+                    <input
+                        type="number"
+                        value={enhancedTestConfig.deliveryFee}
+                        onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, deliveryFee: parseFloat(e.target.value) || 0 }))}
+                        className="w-full p-2 border rounded-md"
+                        step="0.5"
+                        min="0"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Coupon Code (Optional)</label>
+                    <input
+                        type="text"
+                        value={enhancedTestConfig.couponCode}
+                        onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, couponCode: e.target.value.toUpperCase() }))}
+                        className="w-full p-2 border rounded-md"
+                        placeholder="SAVE20"
+                        style={{ textTransform: 'uppercase' }}
+                    />
+                </div>
+            </div>
+
+            <div className="col-span-2 p-2 bg-gray-50 rounded text-sm">
+                <strong>Status:</strong>
+                Restaurant: {enhancedTestConfig.restaurantId ? '✅ Selected' : '❌ None'} |
+                Branch: {enhancedTestConfig.branchId ? '✅ Selected' : '❌ None'} |
+                Items Available: {availableItems.length}
+            </div>
+        </div>
+    );
     const formatDateForInput = (dateValue) => {
         if (!dateValue) return '';
 
@@ -1925,80 +2382,7 @@ const CompleteOffersAdmin = () => {
                     </div>
                     
                     {/* Select Restaurant */}
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Select Restaurants</label>
-
-                        {/* Search bar */}
-                        <div className="mb-3">
-                            <input
-                                type="text"
-                                placeholder="Search restaurants..."
-                                value={restaurantSearch}
-                                onChange={(e) => setRestaurantSearch(e.target.value)}
-                                className="w-full p-2 border rounded-md text-sm"
-                            />
-                        </div>
-
-                        {/* Selected restaurants tags */}
-                        {formData.RestaurantIds.length > 0 && (
-                            <div className="mb-3 p-3 bg-blue-50 rounded-md">
-                                <p className="text-sm font-medium text-blue-800 mb-2">
-                                    Selected Restaurants ({formData.RestaurantIds.length}):
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                    {formData.RestaurantIds.map(restaurantId => {
-                                        const restaurant = restaurants.find(r => r.id === restaurantId);
-                                        return restaurant ? (
-                                            <span key={restaurantId} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                            {restaurant.name}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleRestaurantSelection(restaurantId)}
-                                                    className="text-blue-600 hover:text-blue-800"
-                                                >
-                                <X className="w-3 h-3" />
-                            </button>
-                        </span>
-                                        ) : null;
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Restaurant list */}
-                        {restaurants.length === 0 ? (
-                            <div className="border rounded-md p-4 text-center text-gray-500">
-                                <p>Loading restaurants...</p>
-                            </div>
-                        ) : (
-                            <div className="border rounded-md max-h-48 overflow-y-auto">
-                                {getFilteredRestaurants().length === 0 ? (
-                                    <div className="p-4 text-center text-gray-500">
-                                        <p>No restaurants found</p>
-                                    </div>
-                                ) : (
-                                    getFilteredRestaurants().map(restaurant => (
-                                        <div
-                                            key={restaurant.id}
-                                            onClick={() => toggleRestaurantSelection(restaurant.id)}
-                                            className={`p-3 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                                                formData.RestaurantIds.includes(restaurant.id)
-                                                    ? 'bg-blue-50 border-blue-200'
-                                                    : ''
-                                            }`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm font-medium">{restaurant.name}</span>
-                                                {formData.RestaurantIds.includes(restaurant.id) && (
-                                                    <Check className="w-4 h-4 text-blue-600" />
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
+                    {renderRestaurantBranchSelection()}
 
                     {renderComboSection()}
 
@@ -2538,110 +2922,7 @@ const CompleteOffersAdmin = () => {
         
         <div className="space-y-6">
             {/* Test Configuration */}
-            <div className="bg-white rounded-lg border p-6">
-                <h3 className="text-lg font-semibold mb-4">Enhanced Test Configuration</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">User ID</label>
-                        <input
-                            type="text"
-                            value={enhancedTestConfig.userId}
-                            onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, userId: e.target.value }))}
-                            className="w-full p-2 border rounded-md"
-                            placeholder="test-user-123"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Restaurant</label>
-                        <select
-                            value={enhancedTestConfig.restaurantId}
-                            onChange={(e) => {
-                                const newRestaurantId = e.target.value;
-                                console.log('🏪 Restaurant selected:', newRestaurantId);
-
-                                setEnhancedTestConfig(prev => {
-                                    const updated = { ...prev, restaurantId: newRestaurantId };
-                                    console.log('💾 Updated config:', updated);
-                                    return updated;
-                                });
-
-                                // Load items immediately with current data
-                                if (newRestaurantId) {
-                                    console.log('🔄 Loading items for:', newRestaurantId);
-                                    loadItemsForRestaurant(newRestaurantId);
-                                } else {
-                                    setAvailableItems([]);
-                                }
-                            }}
-                            className="w-full p-2 border rounded-md"
-                        >
-                            <option value="">Select Restaurant</option>
-                            {restaurants.map(restaurant => (
-                                <option key={restaurant.id} value={restaurant.id}>
-                                    {restaurant.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="col-span-2 p-2 bg-gray-50 rounded text-sm">
-                            <strong>Status:</strong>
-                            Restaurant: {enhancedTestConfig.restaurantId ? '✅ Selected' : '❌ None'} |
-                            Items Available: {availableItems.length} |
-                            Products Loaded: {products.length} |
-                            Categories Loaded: {categories.length}
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Delivery Fee (شيقل)</label>
-                        <input
-                            type="number"
-                            value={enhancedTestConfig.deliveryFee}
-                            onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, deliveryFee: parseFloat(e.target.value) || 0 }))}
-                            className="w-full p-2 border rounded-md"
-                            step="0.5"
-                            min="0"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Coupon Code (Optional)</label>
-                        <input
-                            type="text"
-                            value={enhancedTestConfig.couponCode}
-                            onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, couponCode: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 border rounded-md"
-                            placeholder="SAVE20"
-                            style={{ textTransform: 'uppercase' }}
-                        />
-                    </div>
-                </div>
-
-                <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Test Mode</label>
-                    <div className="flex gap-4">
-                        <label className="flex items-center">
-                            <input
-                                type="radio"
-                                checked={enhancedTestConfig.testMode === 'single'}
-                                onChange={() => setEnhancedTestConfig(prev => ({ ...prev, testMode: 'single' }))}
-                                className="mr-2"
-                            />
-                            Selected Offers Only
-                        </label>
-                        <label className="flex items-center">
-                            <input
-                                type="radio"
-                                checked={enhancedTestConfig.testMode === 'multiple'}
-                                onChange={() => setEnhancedTestConfig(prev => ({ ...prev, testMode: 'multiple' }))}
-                                className="mr-2"
-                            />
-                            All Applicable Offers
-                        </label>
-                    </div>
-                </div>
-            </div>
+            {renderTestConfiguration()}
 
             {/* Order Items */}
             <div className="bg-white rounded-lg border p-6">
