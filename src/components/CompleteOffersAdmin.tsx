@@ -851,11 +851,15 @@ const CompleteOffersAdmin = () => {
                 const response = await fetch(loadCategoriesurl);
                 const data = await response.json();
 
-                // Add restaurant info to each category
+                // Add restaurant info to each category INCLUDING RESTAURANT NAME
+                const restaurant = restaurants.find(r => r.id === restaurantId);
                 const categoriesWithRestaurant = data.map(category => ({
                     ...category,
-                    restaurantId: restaurantId
+                    restaurantId: restaurantId,
+                    restaurantName: restaurant?.name || 'Unknown Restaurant', // ADD THIS LINE
+                    restaurantNameEn: restaurant?.nameEn || '' // ADD THIS LINE TOO
                 }));
+
 
                 allCategories.push(...categoriesWithRestaurant);
             }
@@ -882,10 +886,13 @@ const CompleteOffersAdmin = () => {
                 const response = await fetch(loadProductsUrl);
                 const data = await response.json();
 
-                // Add restaurant info to each product
+                // Add restaurant info to each product INCLUDING RESTAURANT NAME
+                const restaurant = restaurants.find(r => r.id === restaurantId);
                 const productsWithRestaurant = data.map(product => ({
                     ...product,
-                    restaurantId: restaurantId
+                    restaurantId: restaurantId,
+                    restaurantName: restaurant?.name || 'Unknown Restaurant', // ADD THIS LINE
+                    restaurantNameEn: restaurant?.nameEn || '' // ADD THIS LINE TOO
                 }));
 
                 allProducts.push(...productsWithRestaurant);
@@ -1646,6 +1653,18 @@ const CompleteOffersAdmin = () => {
             }
             console.log('📝 STEP 2: Setting form data:', formDataToSet);
             setFormData(formDataToSet);
+
+            if (formDataToSet.RestaurantIds.length > 0) {
+                setSelectedProductRestaurants(formDataToSet.RestaurantIds);
+
+                // IMPORTANT: Wait for restaurants to be fully loaded first
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                await Promise.all([
+                    loadCategoriesForRestaurants(formDataToSet.RestaurantIds),
+                    loadProductsForRestaurants(formDataToSet.RestaurantIds)
+                ]);
+            }
 
             // STEP 3: For product/category offers, sync restaurant selections
             if ((formDataToSet.offerType === 1 || formDataToSet.offerType === 2) || ([5, 6, 7].includes(formDataToSet.offerType) &&
@@ -2759,7 +2778,7 @@ const CompleteOffersAdmin = () => {
                                                         <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                                     )}
                                                     <span className="text-xs text-blue-500">
-                                                    {restaurant?.name || 'Unknown Restaurant'}
+                    {item.restaurantName || 'Unknown Restaurant'}
                                                 </span>
                                                 </div>
 
@@ -2904,7 +2923,7 @@ const CompleteOffersAdmin = () => {
                                             <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                         )}
                                         <span className="text-xs text-gray-400 block">
-                                        Restaurant: {restaurants.find(r => r.id === item.restaurantId)?.name || item.restaurantId}
+                        Restaurant: {item.restaurantName || item.restaurantId}
                                     </span>
                                     </div>
                                     {formData.Targets.includes(item.id) && (
