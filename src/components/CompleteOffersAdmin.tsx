@@ -12,16 +12,11 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [selectedRestaurantFilter, setSelectedRestaurantFilter] = useState('');
     //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
     const API_BASE_URL = 'http://localhost:5159';
 
-    const [RestaurantBranches, setRestaurantBranches] = useState([]); // Array of {restaurantId, branchId}
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
-    const [selectedBranches, setSelectedBranches] = useState([]);
 
-
-    const [selectedCities, setSelectedCities] = useState([]);
     const [showCitySelector, setShowCitySelector] = useState(false);
 
     // Complete form state for ALL offer types
@@ -38,6 +33,7 @@ const CompleteOffersAdmin = () => {
         priority: 1,
         isStackable: false,
         maxUsagePerUser: '',
+        wheelsContribution: 0 ,
         maxUsageTotal: '',
         startDate: null,
         endDate: null,
@@ -91,10 +87,10 @@ const CompleteOffersAdmin = () => {
 
     const [enhancedTestConfig, setEnhancedTestConfig] = useState({
         selectedOffers: [],
-        userId: 'test-user-123',
+        userId: '48e6f6e7-e2eb-4771-99fd-eca1fef0a161',
         restaurantId: '',
         branchId: '',
-        deliveryFee: 3.00,
+        deliveryFee: 10,
         couponCode: '',
         testMode: 'single' // 'single' or 'multiple'
     });
@@ -942,29 +938,11 @@ const CompleteOffersAdmin = () => {
         });
     };
 
-    const [testOrderData, setTestOrderData] = useState({
-        userId: 'test-user-123',
-        restaurantId: '',
-        items: [
-            {
-                productId: '1',
-                categoryId: '1',
-                price: 15.50,
-                quantity: 2,
-                total: 31.00
-            }
-        ],
-        deliveryFee: 3.00,
-        couponCode: ''
-    });
-    const [testResults, setTestResults] = useState([]);
-    const [testingOffer, setTestingOffer] = useState(null);
-    const [selectedRestaurantForTargeting, setSelectedRestaurantForTargeting] = useState('');
+    
     const [restaurantSearch, setRestaurantSearch] = useState('');
     const [productSearch, setProductSearch] = useState('');
     const [comboProductSearch, setComboProductSearch] = useState('');
     const [selectedComboRestaurant, setSelectedComboRestaurant] = useState('');
-    const [productRestaurantSearch, setProductRestaurantSearch] = useState('');
     const [selectedProductRestaurants, setSelectedProductRestaurants] = useState([]);
     const [subOfferType, setSubOfferType] = useState('order'); // 'product', 'category', 'order'
     const [comboTargetType, setComboTargetType] = useState('Product'); // 'product' or 'category'
@@ -1112,51 +1090,6 @@ const CompleteOffersAdmin = () => {
         }
     };
    
-    const getFilteredRestaurants = () => {
-        if (!restaurantSearch) return restaurants;
-        return restaurants.filter(restaurant =>
-            restaurant.name.toLowerCase().includes(restaurantSearch.toLowerCase()) ||
-            (restaurant.nameEn && restaurant.nameEn.toLowerCase().includes(restaurantSearch.toLowerCase()))
-        );
-    };
-
-    const getFilteredProductsOrCategories = () => {
-        const items = formData.offerType === 1 ? products : categories;
-        if (!productSearch) return items;
-        return items.filter(item =>
-            item.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-            (item.nameEn && item.nameEn.toLowerCase().includes(productSearch.toLowerCase()))
-        );
-    };
-
-    const toggleRestaurantSelection = (restaurantId) => {
-        setFormData(prev => {
-            const isSelected = prev.RestaurantIds.includes(restaurantId);
-            const newRestaurantIds = isSelected
-                ? prev.RestaurantIds.filter(id => id !== restaurantId)
-                : [...prev.RestaurantIds, restaurantId];
-
-            // SYNC: Update selectedProductRestaurants for product/category offers
-            if (prev.offerType === 1 || prev.offerType === 2) {
-                setSelectedProductRestaurants(newRestaurantIds);
-
-                // Load data for new restaurant selection
-                if (newRestaurantIds.length > 0) {
-                    loadCategoriesForRestaurants(newRestaurantIds);
-                    loadProductsForRestaurants(newRestaurantIds);
-                } else {
-                    loadCategories();
-                    loadProducts();
-                }
-            }
-
-            return {
-                ...prev,
-                RestaurantIds: newRestaurantIds
-            };
-        });
-    };
-    
     const getFilteredProductsByRestaurants = () => {
         console.log('🔍 === FILTERING PRODUCTS/CATEGORIES ===');
         console.log('✏️ Editing offer:', editingOffer?.offerId);
@@ -1579,8 +1512,9 @@ const CompleteOffersAdmin = () => {
                 minOrderAmount: formData.minOrderAmount ? parseFloat(formData.minOrderAmount) : null,
                 buyQuantity: formData.buyQuantity ? parseInt(formData.buyQuantity) : null,
                 getQuantity: formData.getQuantity ? parseInt(formData.getQuantity) : null,
-                getDiscountPercent: formData.getDiscountPercent ? parseFloat(formData.getDiscountPercent.toString()) : 100,
+                getDiscountPercent: formData.getDiscountPercent ? parseFloat(formData.getDiscountPercent.toString()) : 0,
                 maxUsagePerUser: formData.maxUsagePerUser ? parseInt(formData.maxUsagePerUser) : null,
+                wheelsContribution: formData.wheelsContribution ? parseFloat(formData.wheelsContribution.toString()) : 0,
                 maxUsageTotal: formData.maxUsageTotal ? parseInt(formData.maxUsageTotal) : null,
                 minItemQuantity: formData.minItemQuantity ? parseInt(formData.minItemQuantity) : null,
                 flashSaleQuantity: formData.flashSaleQuantity ? parseInt(formData.flashSaleQuantity) : null,
@@ -1675,19 +1609,7 @@ const CompleteOffersAdmin = () => {
         }
     };
 
-    const renderFieldLabel = (text, required = false, helpText = null) => (
-        <div className="block text-sm font-medium mb-1">
-            {text}
-            {required && <span className="text-red-500 ml-1">*</span>}
-            {helpText && (
-                <div className="text-xs text-gray-500 font-normal mt-1">
-                    {helpText}
-                </div>
-            )}
-        </div>
-    );
 
-// 9. ADD FORM PROGRESS INDICATOR
     const getFormCompletionStatus = () => {
         const errors = validateForm();
         const totalRequiredFields = [
@@ -1731,45 +1653,6 @@ const CompleteOffersAdmin = () => {
         };
     };
 
-    const renderFormHeader = () => {
-        const status = getFormCompletionStatus();
-
-        return (
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold">
-                        {editingOffer ? 'Edit Offer' : 'Create New Offer'}
-                    </h2>
-                    <div className="mt-2 flex items-center gap-3">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2">
-                            <div
-                                className={`h-2 rounded-full transition-all duration-300 ${
-                                    status.isValid ? 'bg-green-500' : 'bg-blue-500'
-                                }`}
-                                style={{ width: `${status.percentage}%` }}
-                            />
-                        </div>
-                        <span className="text-sm text-gray-600">
-                        {status.completed}/{status.total} completed
-                    </span>
-                        {status.isValid && (
-                            <span className="text-sm text-green-600 font-medium">✓ Ready to save</span>
-                        )}
-                    </div>
-                </div>
-                <button
-                    onClick={() => {
-                        setShowCreateModal(false);
-                        setEditingOffer(null);
-                        resetForm();
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                >
-                    <X className="w-6 h-6" />
-                </button>
-            </div>
-        );
-    };
     const getCompatibleDiscountTypes = (offerType) => {
         const compatibility = {
             1: [1, 2, 3], // Product: Percentage, Fixed, BuyXGetY
@@ -1842,6 +1725,7 @@ const CompleteOffersAdmin = () => {
             priority: () => true,
             isStackable: () => true,
             maxUsagePerUser: () => true,
+            wheelsContribution: () => true,
             maxUsageTotal: () => true,
             minItemQuantity: () => true,
 
@@ -1852,22 +1736,12 @@ const CompleteOffersAdmin = () => {
         return rules[fieldName] ? rules[fieldName]() : false;
     };
 
-    const mapBranchesToRestaurantFormat = (restaurantBranches) => {
-        return restaurantBranches.map(rb => ({
-            id: rb.id,
-            branchId: rb.branchId,
-            name: rb.name || '',
-            nameEn: rb.nameEn || '',
-            branchName: rb.branchName || 'Main Branch',
-            cityName: rb.cityName || ''
-        }));
-    };
     const resetForm = () => {
         setFormData({
             name: '', nameEn: '', description: '', descriptionEn: '',
             offerType: 1, discountType: 1, discountValue: '',
             maxDiscountAmount: '', minOrderAmount: '', priority: 1, isStackable: false,
-            maxUsagePerUser: '', maxUsageTotal: '', startDate: '', endDate: '',
+            maxUsagePerUser: '', wheelsContribution:0, maxUsageTotal: '', startDate: '', endDate: '',
             isActive: true, buyQuantity: '', getQuantity: '', getDiscountPercent: 100,
             isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
             endTime: null, minItemQuantity: '', isComboOffer: false, comboItems: [],
@@ -1879,8 +1753,6 @@ const CompleteOffersAdmin = () => {
         setRestaurantSearch('');
         setProductSearch('');
         setComboProductSearch('');
-        setProductRestaurantSearch(''); // Add this line
-        setSelectedRestaurantForTargeting('');
         setSelectedComboRestaurant('');
         setSelectedProductRestaurants([]); // Add this line
         setSubOfferType('order'); // Reset sub-offer type
@@ -2008,6 +1880,7 @@ const CompleteOffersAdmin = () => {
 
                 // Usage Limits
                 maxUsagePerUser: offerDetail.maxUsagePerUser?.toString() || '',
+                wheelsContribution: offerDetail.wheelsContribution || 0,
                 maxUsageTotal: offerDetail.maxUsageTotal?.toString() || '',
 
                 // FIXED: Dates - convert DateTime to date string format
@@ -2141,7 +2014,7 @@ const CompleteOffersAdmin = () => {
                         value={enhancedTestConfig.userId}
                         onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, userId: e.target.value }))}
                         className="w-full p-2 border rounded-md"
-                        placeholder="test-user-123"
+                        placeholder="48e6f6e7-e2eb-4771-99fd-eca1fef0a161"
                     />
                 </div>
 
@@ -2303,32 +2176,6 @@ const CompleteOffersAdmin = () => {
         const type = offerTypes.find(t => t.value === offerType);
         return type ? type.icon : <Gift className="w-5 h-5" />;
     };
-
-    const renderOfferTypeSelection = () => (
-        <div>
-            <label className="block text-sm font-medium mb-2">Offer Type *</label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {offerTypes.map(type => (
-                    <button
-                        key={type.value}
-                        type="button"
-                        onClick={() => handleOfferTypeChange(type.value)}
-                        className={`p-4 border rounded-lg text-left hover:shadow-md transition-shadow ${
-                            formData.offerType === type.value
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-3 mb-2">
-                            {type.icon}
-                            <span className="font-medium">{type.label}</span>
-                        </div>
-                        <p className="text-xs text-gray-600">{type.description}</p>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
     
     const getOfferBadges = (offer) => {
         const badges = [];
@@ -2415,95 +2262,6 @@ const CompleteOffersAdmin = () => {
         return errors;
     };
 
-// 5. ADD AUTO-FILL LOGIC WHEN OFFER TYPE CHANGES
-    const handleOfferTypeChange = (newOfferType) => {
-        const previousType = formData.offerType;
-
-        // Update offer type
-        handleInputChange('offerType', newOfferType);
-
-        // Auto-fill required fields based on offer type
-        const updates = {
-            isFirstOrderOnly: undefined,
-            userTiers: undefined,
-            dayOfWeek: undefined,
-            startTime: undefined,
-            endTime: undefined,
-            flashSaleQuantity: undefined,
-            Targets: undefined,
-            comboItems: undefined,
-        };
-
-        switch (newOfferType) {
-            case 5: // First Order
-                updates.isFirstOrderOnly = true;
-                break;
-
-            case 6: // Loyalty Tier
-                // Keep existing user tiers or suggest default
-                if (formData.userTiers.length === 0) {
-                    updates.userTiers = ['Bronze']; // Default suggestion
-                }
-                break;
-
-            case 7: // Time-Based
-                // Keep existing time settings or suggest defaults
-                if (formData.dayOfWeek.length === 0) {
-                    updates.dayOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; // Weekdays default
-                }
-                if (!formData.startTime) updates.startTime = '09:00';
-                if (!formData.endTime) updates.endTime = '17:00';
-                break;
-
-            case 9: // Flash Sale
-                if (!formData.flashSaleQuantity) updates.flashSaleQuantity = '100'; // Default suggestion
-                break;
-        }
-
-        // Reset incompatible fields when changing offer types
-        if (previousType !== newOfferType) {
-            // Reset targets if changing between product/category/order types
-            if ([1, 2].includes(previousType) && ![1, 2, 5, 6, 7, 8, 9].includes(newOfferType)) {
-                updates.Targets = [];
-            }
-
-            // Reset combo items if leaving combo type
-            if (previousType === 8 && newOfferType !== 8) {
-                updates.comboItems = [];
-            }
-
-            // Reset time fields if leaving time-based type
-            if (previousType === 7 && newOfferType !== 7) {
-                updates.dayOfWeek = [];
-                updates.startTime = null;
-                updates.endTime = null;
-            }
-
-            // Reset user tiers if leaving loyalty type
-            if (previousType === 6 && newOfferType !== 6) {
-                updates.userTiers = [];
-            }
-
-            // Reset flash sale quantity if leaving flash sale type
-            if (previousType === 9 && newOfferType !== 9) {
-                updates.flashSaleQuantity = '';
-            }
-
-            // Reset first order flag if leaving first order type
-            if (previousType === 5 && newOfferType !== 5) {
-                updates.isFirstOrderOnly = false;
-            }
-        }
-
-        // Apply updates
-        setFormData(prev => ({ ...prev, ...updates }));
-
-        // Reset discount type if not compatible
-        const compatibleTypes = getCompatibleDiscountTypes(newOfferType);
-        if (!compatibleTypes.includes(formData.discountType)) {
-            handleInputChange('discountType', compatibleTypes[0]);
-        }
-    };
     const renderOfferForm = () => (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto shadow-xl">
@@ -3004,6 +2762,17 @@ const CompleteOffersAdmin = () => {
                                         required
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Wheels Contribution</label>
+                                    <input
+                                        type="number"
+                                        value={formData.wheelsContribution}
+                                        onChange={(e) => handleInputChange('wheelsContribution', e.target.value)}
+                                        className="w-full p-2 border rounded-md"
+                                        required
+                                        min="0"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3048,14 +2817,6 @@ const CompleteOffersAdmin = () => {
             </div>
         </div>
     );
-    const getCitiesFromOffer = (offer) => {
-        if (!offer.restaurantBranches || offer.restaurantBranches.length === 0) return [];
-        const cities = [...new Set(offer.restaurantBranches
-            .map(rb => rb.cityName)
-            .filter(city => city && typeof city === 'string' && city.trim())
-        )];
-        return cities;
-    };
     
     const OfferCard = ({ offer }) => {
         const getCitiesFromOffer = (offer) => {
