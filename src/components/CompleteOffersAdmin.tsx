@@ -2,8 +2,22 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Target, Percent, DollarSign, Gift, Users, MapPin, Tag, Clock, X, Zap, Award, Package, Check } from 'lucide-react';
 import { Play, Minus, RefreshCw } from 'lucide-react';
 import {Layers, CheckCircle, XCircle } from 'lucide-react';
+import { BarChart } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 const CompleteOffersAdmin = () => {
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        const role = localStorage.getItem('userRole');
+
+        if (!token || role !== 'admin') {
+            // Redirect to login or show unauthorized
+            window.location.reload(); // This will trigger the auth check in MainApp
+            return;
+        }
+    }, []);
+    
     const [activeTab, setActiveTab] = useState('list');
     const [offers, setOffers] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
@@ -12,8 +26,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    const API_BASE_URL = 'http://localhost:5159';
+    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    //const API_BASE_URL = 'http://localhost:5159';
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -502,7 +516,7 @@ const CompleteOffersAdmin = () => {
 
             {/* Selected summary */}
             {formData.RestaurantBranches.length > 0 && (
-                <div className="mb-3 p-3 bg-blue-50 rounded-md">
+                <div className="mb-3 p-3 bg-red-50 rounded-md">
                     <p className="text-sm font-medium text-blue-800 mb-2">
                         Selected: {formData.RestaurantIds.length} restaurants, {formData.RestaurantBranches.length} branches
                     </p>
@@ -514,10 +528,10 @@ const CompleteOffersAdmin = () => {
 
                             return (
                                 <div key={restaurantId} className="text-xs">
-                                <span className="font-medium text-blue-700">
+                                <span className="font-medium text-red-700">
                                     {restaurant?.name || 'Unknown'}: 
                                 </span>
-                                    <span className="text-blue-600 ml-1">
+                                    <span className="text-red-600 ml-1">
                                     {RestaurantBranches.length} of {totalBranches} branches
                                 </span>
                                 </div>
@@ -567,7 +581,7 @@ const CompleteOffersAdmin = () => {
                                                 {totalBranches} branches
                                             </div>
                                             {selectedBranches > 0 && (
-                                                <div className="text-xs font-medium text-blue-600">
+                                                <div className="text-xs font-medium text-red-600">
                                                     {selectedBranches}/{totalBranches} selected
                                                 </div>
                                             )}
@@ -631,7 +645,7 @@ const CompleteOffersAdmin = () => {
                                     {/* Restaurant Header */}
                                     <div
                                         className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                                            RestaurantBranches.length > 0 ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'bg-gray-50'
+                                            RestaurantBranches.length > 0 ? 'bg-red-50 border-l-4 border-l-red-500' : 'bg-gray-50'
                                         }`}
                                         onClick={() => toggleRestaurantExpansion(restaurant.id)}
                                     >
@@ -650,7 +664,7 @@ const CompleteOffersAdmin = () => {
                                                 </div>
                                             </div>
                                             {RestaurantBranches.length > 0 && (
-                                                <span className="text-xs text-blue-600 font-medium bg-blue-100 px-2 py-1 rounded">
+                                                <span className="text-xs text-red-600 font-medium bg-red-100 px-2 py-1 rounded">
                                                 {RestaurantBranches.length} selected
                                             </span>
                                             )}
@@ -1467,7 +1481,7 @@ const CompleteOffersAdmin = () => {
                             onClick={() => handleInputChange('discountType', type.value)}
                             className={`p-3 border rounded-md flex items-center gap-2 text-sm ${
                                 formData.discountType === type.value
-                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                    ? 'border-red-500 bg-red-50 text-red-700'
                                     : 'border-gray-300 hover:border-gray-400'
                             }`}
                         >
@@ -2179,7 +2193,7 @@ const CompleteOffersAdmin = () => {
     
     const getOfferBadges = (offer) => {
         const badges = [];
-        if (offer.isFirstOrderOnly) badges.push({ text: 'NEW CUSTOMER', color: 'bg-blue-100 text-blue-800' });
+        if (offer.isFirstOrderOnly) badges.push({ text: 'NEW CUSTOMER', color: 'bg-red-100 text-blue-800' });
         if (offer.requiresCouponCode) badges.push({ text: 'COUPON', color: 'bg-purple-100 text-purple-800' });
         if (offer.userTiers?.length) badges.push({ text: 'VIP', color: 'bg-yellow-100 text-yellow-800' });
         if (offer.flashSaleQuantity) badges.push({ text: 'FLASH SALE', color: 'bg-red-100 text-red-800' });
@@ -2340,7 +2354,7 @@ const CompleteOffersAdmin = () => {
                                     onClick={() => handleInputChange('offerType', type.value)}
                                     className={`p-4 border rounded-lg text-left hover:shadow-md transition-shadow ${
                                         formData.offerType === type.value
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                            ? 'border-red-500 bg-red-50 text-red-700'
                                             : 'border-gray-300 hover:border-gray-400'
                                     }`}
                                 >
@@ -2403,8 +2417,8 @@ const CompleteOffersAdmin = () => {
 
                         {/* Free Delivery Notice */}
                         {formData.discountType === 4 && (
-                            <div className="bg-blue-50 p-3 rounded-md">
-                                <p className="text-sm text-blue-700">
+                            <div className="bg-red-50 p-3 rounded-md">
+                                <p className="text-sm text-red-700">
                                     Free delivery will be applied to delivery fee. No additional configuration needed.
                                 </p>
                             </div>
@@ -2466,9 +2480,9 @@ const CompleteOffersAdmin = () => {
 
                     {/* Offer-specific sections - Conditional */}
                     {shouldShowField('firstOrderSection', formData.offerType, formData.discountType) && (
-                        <div className="border rounded-lg p-4 bg-blue-50">
+                        <div className="border rounded-lg p-4 bg-red-50">
                             <h3 className="font-medium mb-3 flex items-center gap-2">
-                                <Users className="w-5 h-5 text-blue-600" />
+                                <Users className="w-5 h-5 text-red-600" />
                                 First Order Configuration
                             </h3>
                             <div className="flex items-center gap-2">
@@ -2480,7 +2494,7 @@ const CompleteOffersAdmin = () => {
                                 />
                                 <label className="text-sm font-medium">Only for first-time customers *</label>
                             </div>
-                            <p className="text-sm text-blue-600 mt-2">
+                            <p className="text-sm text-red-600 mt-2">
                                 This offer will only be available to customers placing their first order.
                             </p>
                         </div>
@@ -2808,7 +2822,7 @@ const CompleteOffersAdmin = () => {
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading}
-                            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                            className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
                         >
                             {loading ? 'Saving…' : 'Save Offer'}
                         </button>
@@ -2817,82 +2831,239 @@ const CompleteOffersAdmin = () => {
             </div>
         </div>
     );
-    
-    const OfferCard = ({ offer }) => {
-        const getCitiesFromOffer = (offer) => {
-            if (!offer.restaurantBranches || offer.restaurantBranches.length === 0) return [];
-            const cities = [...new Set(offer.restaurantBranches
-                .map(rb => rb.cityName)
-                .filter(city => city && city.trim())
-            )];
-            return cities;
+
+    // ---- New helpers ----
+    const normalizeCity = (s) => (s || '').trim().toLowerCase();
+
+// Tries to pull a branch id from common field names
+    const pickBranchId = (b) => b?.branchId ?? b?.id ?? b?.Id ?? b?.branchID;
+
+// Build: Map<normalizedCity, Set<branchId>>
+    function buildCityToBranchIds(restaurants) {
+        const cityToBranchIds = new Map();
+
+        const push = (city, branchId) => {
+            if (!city || branchId == null) return;
+            const key = normalizeCity(city);
+            if (!cityToBranchIds.has(key)) cityToBranchIds.set(key, new Set());
+            cityToBranchIds.get(key).add(branchId);
         };
 
-        const cities = getCitiesFromOffer(offer);
+        if (Array.isArray(restaurants)) {
+            for (const r of restaurants) {
+                // Case A: restaurants are { cityName, branches: [...] }
+                if (Array.isArray(r?.branches)) {
+                    for (const b of r.branches) {
+                        push(r.cityName ?? r.city ?? b.cityName ?? b.city, pickBranchId(b));
+                    }
+                } else {
+                    // Case B: already flat "branch-like" items { cityName, branchId/id }
+                    push(r.cityName ?? r.city, pickBranchId(r));
+                }
+            }
+        } else if (restaurants && typeof restaurants === 'object') {
+            // Case C: { [cityName]: Branch[] }
+            for (const [city, branches] of Object.entries(restaurants)) {
+                if (!Array.isArray(branches)) continue;
+                for (const b of branches) push(city, pickBranchId(b));
+            }
+        }
+
+        return cityToBranchIds;
+    }
+
+    /**
+     * Returns cities (normalized names) where the offer covers ALL branches,
+     * plus a coverage breakdown per city and a quick boolean.
+     */
+    function getOfferCityCoverage(offer, restaurants) {
+        const offeredBranchIds = new Set(
+            (offer?.restaurantBranches ?? [])
+                .map(b => pickBranchId(b))
+                .filter(Boolean)
+        );
+
+        const cityToBranchIds = buildCityToBranchIds(restaurants);
+        const citiesFullyCovered = [];
+        const coverageByCity = {};
+
+        for (const [cityKey, branchIdSet] of cityToBranchIds.entries()) {
+            let coveredCount = 0;
+            for (const id of branchIdSet) if (offeredBranchIds.has(id)) coveredCount++;
+
+            const total = branchIdSet.size;
+            const isFullCoverage = total > 0 && coveredCount === total;
+
+            if (isFullCoverage) citiesFullyCovered.push(cityKey);
+
+            coverageByCity[cityKey] = {
+                coveredCount,
+                total,
+                isFullCoverage,
+                missingBranchIds: [...branchIdSet].filter(id => !offeredBranchIds.has(id)),
+            };
+        }
+
+        return {
+            citiesFullyCovered,              // array of normalized city names fully covered
+            hasAnyFullCity: citiesFullyCovered.length > 0,
+            coverageByCity,                  // per-city details for debugging/UX
+            citiesInOffer: getCitiesFromOffer(offer), // from your original helper
+        };
+    }
+    const getCitiesFromOffer = (offer) => {
+        if (!offer.restaurantBranches || offer.restaurantBranches.length === 0) return [];
+        const cities = [...new Set(offer.restaurantBranches
+            .map(rb => rb.cityName)
+            .filter(city => city && city.trim())
+        )];
+        return cities;
+    };
+    const OfferCard = ({ offer }) => {
+        
+        const result = getOfferCityCoverage(offer, restaurants);
+        if (result.hasAnyFullCity) {
+            console.log('Offer fully covers at least one city:', result.citiesFullyCovered);
+        } else {
+            console.log('No city is fully covered.');
+        }
+        const cities = result.citiesFullyCovered;
         const isOrderLevel = isOrderLevelOffer(offer);
 
         return (
-            <div className="p-4 rounded-lg border bg-white shadow-sm">
-                <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-md bg-gray-100">{getOfferIcon(offer.offerType)}</div>
-                        <div>
-                            <h4 className="font-semibold">{offer.name}</h4>
-                            <p className="text-xs text-gray-500">
-                                {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
-                            </p>
+            <div className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 overflow-hidden">
+                {/* Header with Status */}
+                <div className="p-5 border-b border-gray-100">
+                    <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2.5 rounded-xl ${
+                                offer.isActive ? 'bg-blue-100' : 'bg-gray-100'
+                            }`}>
+                                {getOfferIcon(offer.offerType)}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-gray-900 text-lg">{offer.name}</h4>
+                                <p className="text-sm text-gray-500 font-medium">
+                                    {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
+                                </p>
+                            </div>
+                        </div>
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor(offer)}`}>
+                        {getStatusText(offer)}
+                    </span>
+                    </div>
 
-                            {/* CITY INDICATOR FOR ORDER-LEVEL OFFERS */}
-                            {isOrderLevel && cities.length > 0 && (
-                                <div className="mt-1">
-        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-            🏙️ {String(cities.length === 1
-            ? cities[0]
-            : cities.length <= 2
-                ? cities.join(', ')
-                : `${cities.length} cities`
-        )}
-        </span>
-                                </div>
-                            )}
-
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {getOfferBadges(offer).map((b, i) => (
-                                    <span key={i} className={`px-2 py-0.5 rounded text-xs ${b.color}`}>{b.text}</span>
-                                ))}
-                                {/* ADD CITY-WIDE BADGE */}
-                                {isOrderLevel && (
-                                    <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
-                                    CITY-WIDE
-                                </span>
+                    {/* Discount Value Display */}
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 mb-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">Discount Value</span>
+                            <div className="text-right">
+                            <span className="text-xl font-bold text-green-600">
+                                {offer.discountType === 1 ? `${offer.discountValue}%` :
+                                    offer.discountType === 2 ? `${offer.discountValue} ₪` :
+                                        offer.discountType === 4 ? 'Free Delivery' : 'Buy X Get Y'}
+                            </span>
+                                {offer.maxDiscountAmount && (
+                                    <p className="text-xs text-gray-500">Max: {offer.maxDiscountAmount} ₪</p>
                                 )}
                             </div>
                         </div>
                     </div>
-                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(offer)}`}>
-                    {getStatusText(offer)}
-                </span>
+
+                    {/* City Indicator */}
+                    {isOrderLevel && cities.length > 0 && (
+                        <div className="flex items-center gap-2 mb-3">
+                            <MapPin className="w-4 h-4 text-purple-500" />
+                            <span className="text-sm bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium">
+                             🏙️ {String(cities.length === 1             ? cities[0]             : cities.length <= 2                 ? cities.join(', ')                 : `${cities.length} cities`         )}
+                        </span>
+                        </div>
+                    )}
+
+                    {/* Badges */}
+                    <div className="flex flex-wrap gap-2">
+                        {getOfferBadges(offer).map((badge, i) => (
+                            <span key={i} className={`px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
+                            {badge.text}
+                        </span>
+                        ))}
+                        {isOrderLevel && cities.length > 0 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            CITY-WIDE
+                        </span>
+                        )}
+                    </div>
                 </div>
 
-                {/* EXISTING CARD CONTENT */}
-                <div className="mt-3 flex items-center gap-3 text-sm text-gray-600">
-                    <span>Priority: <b>{offer.priority ?? '-'}</b></span>
-                    <span>Usage: <b>{offer.currentUsage ?? 0}</b>{offer.maxUsageTotal ? ` / ${offer.maxUsageTotal}` : ''}</span>
-                    {offer.startDate && offer.endDate && (
-                        <span>{offer.startDate} → {offer.endDate}</span>
+                {/* Stats Section */}
+                <div className="p-5 bg-gray-50">
+                    <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                        <div>
+                            <div className="text-lg font-bold text-gray-900">{offer.priority ?? '5'}</div>
+                            <div className="text-xs text-gray-500">Priority</div>
+                        </div>
+                        <div>
+                            <div className="text-lg font-bold text-blue-600">{offer.currentUsage ?? 0}</div>
+                            <div className="text-xs text-gray-500">Used</div>
+                        </div>
+                        <div>
+                            <div className="text-lg font-bold text-gray-600">
+                                {offer.maxUsageTotal ? offer.maxUsageTotal : '∞'}
+                            </div>
+                            <div className="text-xs text-gray-500">Limit</div>
+                        </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    {offer.maxUsageTotal && (
+                        <div className="mb-4">
+                            <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                <span>Usage Progress</span>
+                                <span>{Math.round(((offer.currentUsage || 0) / offer.maxUsageTotal) * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all"
+                                    style={{
+                                        width: `${Math.min(((offer.currentUsage || 0) / offer.maxUsageTotal) * 100, 100)}%`
+                                    }}
+                                />
+                            </div>
+                        </div>
                     )}
-                </div>
-                <div className="mt-4 flex gap-2">
-                    <button onClick={() => handleEdit(offer)} className="px-3 py-1.5 rounded border flex items-center gap-1">
-                        <Edit2 className="w-4 h-4"/> Edit
-                    </button>
-                    <button onClick={() => handleDelete(offer.offerId)} className="px-3 py-1.5 rounded border flex items-center gap-1 text-red-600 border-red-300">
-                        <Trash2 className="w-4 h-4"/> Delete
-                    </button>
+
+                    {/* Date Range */}
+                    {offer.startDate && offer.endDate && (
+                        <div className="text-xs text-gray-500 bg-white rounded-lg p-2 mb-4 border">
+                            <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{new Date(offer.startDate).toLocaleDateString()} → {new Date(offer.endDate).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => handleEdit(offer)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all font-medium text-gray-700"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                            Edit
+                        </button>
+                        <button
+                            onClick={() => handleDelete(offer.offerId)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 hover:border-red-300 transition-all font-medium text-red-600"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     };
+    
     const renderSubTargetingSection = () => {
         if (![5, 6, 7].includes(formData.offerType)) return null;
 
@@ -2903,11 +3074,11 @@ const CompleteOffersAdmin = () => {
         };
 
         return (
-            <div className="border rounded-lg p-4 bg-blue-50">
+            <div className="border rounded-lg p-4 bg-red-50">
                 <h3 className="font-medium mb-3">
                     {offerTypeNames[formData.offerType]} Target Level
                 </h3>
-                <p className="text-sm text-blue-600 mb-3">
+                <p className="text-sm text-red-600 mb-3">
                     Choose whether this {offerTypeNames[formData.offerType].toLowerCase()} offer applies to specific products, categories, or the entire order.
                 </p>
 
@@ -2917,7 +3088,7 @@ const CompleteOffersAdmin = () => {
                         onClick={() => handleSubOfferTypeChange('product')} // Use the new handler
                         className={`p-3 border rounded-md text-left ${
                             subOfferType === 'product'
-                                ? 'border-blue-500 bg-blue-100 text-blue-700'
+                                ? 'border-red-500 bg-red-100 text-red-700'
                                 : 'border-gray-300 hover:border-gray-400'
                         }`}
                     >
@@ -2933,7 +3104,7 @@ const CompleteOffersAdmin = () => {
                         onClick={() => handleSubOfferTypeChange('category')} // Use the new handler
                         className={`p-3 border rounded-md text-left ${
                             subOfferType === 'category'
-                                ? 'border-blue-500 bg-blue-100 text-blue-700'
+                                ? 'border-red-500 bg-red-100 text-red-700'
                                 : 'border-gray-300 hover:border-gray-400'
                         }`}
                     >
@@ -2949,7 +3120,7 @@ const CompleteOffersAdmin = () => {
                         onClick={() => handleSubOfferTypeChange('order')} // Use the new handler
                         className={`p-3 border rounded-md text-left ${
                             subOfferType === 'order'
-                                ? 'border-blue-500 bg-blue-100 text-blue-700'
+                                ? 'border-red-500 bg-red-100 text-red-700'
                                 : 'border-gray-300 hover:border-gray-400'
                         }`}
                     >
@@ -3083,7 +3254,7 @@ const CompleteOffersAdmin = () => {
                                                         {comboTargetType === 'Product' && item.price && (
                                                             <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                                         )}
-                                                        <span className="text-xs text-blue-600 block">
+                                                        <span className="text-xs text-red-600 block">
                                                         {restaurant?.name || 'Unknown Restaurant'}
                                                     </span>
                                                         <span className="text-xs text-purple-600 block">
@@ -3161,7 +3332,7 @@ const CompleteOffersAdmin = () => {
                                                 loadCategoriesForRestaurants(formData.RestaurantIds);
                                             }
                                         }}
-                                        className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
                                     >
                                         Reload
                                     </button>
@@ -3204,7 +3375,7 @@ const CompleteOffersAdmin = () => {
                                                     {comboTargetType === 'Product' && item.price && (
                                                         <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
                                                     )}
-                                                    <span className="text-xs text-blue-500">
+                                                    <span className="text-xs text-red-500">
                     {item.restaurantName || 'Unknown Restaurant'}
                                                 </span>
                                                 </div>
@@ -3260,7 +3431,7 @@ const CompleteOffersAdmin = () => {
                 </label>
 
                 {/* Show sync status */}
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                <div className="mb-4 p-3 bg-red-50 border border-blue-200 rounded text-sm">
                     <strong>Restaurant Filter Status:</strong><br/>
                     Selected Restaurants: {formData.RestaurantIds.length}<br/>
                     {formData.RestaurantIds.length > 0 && (
@@ -3377,7 +3548,7 @@ const CompleteOffersAdmin = () => {
                     {enhancedTestConfig.restaurantId && (
                         <button
                             onClick={() => setShowItemSelector(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
                         >
                             <Plus className="w-4 h-4" />
                             Add Item
@@ -3408,7 +3579,7 @@ const CompleteOffersAdmin = () => {
                                     <div>Product ID: {item.productId}</div>
                                     <div>Category ID: {item.categoryId}</div>
                                     {item.categoryName && (
-                                        <div className="text-blue-600">Category: {item.categoryName}</div>
+                                        <div className="text-red-600">Category: {item.categoryName}</div>
                                     )}
                                 </div>
                             </div>
@@ -3497,7 +3668,7 @@ const CompleteOffersAdmin = () => {
                     {getApplicableOffers().map(offer => (
                         <div key={offer.offerId} className={`border rounded-lg p-3 cursor-pointer transition-colors ${
                             enhancedTestConfig.selectedOffers.includes(offer.offerId)
-                                ? 'border-blue-500 bg-blue-50'
+                                ? 'border-red-500 bg-red-50'
                                 : 'border-gray-200 hover:border-gray-300'
                         }`}
                              onClick={() => enhancedTestConfig.testMode === 'single' && toggleOfferSelection(offer.offerId)}
@@ -3515,7 +3686,7 @@ const CompleteOffersAdmin = () => {
                                 </div>
 
                                 {enhancedTestConfig.testMode === 'single' && enhancedTestConfig.selectedOffers.includes(offer.offerId) && (
-                                    <Check className="w-4 h-4 text-blue-600" />
+                                    <Check className="w-4 h-4 text-red-600" />
                                 )}
                             </div>
                         </div>
@@ -3575,15 +3746,15 @@ const CompleteOffersAdmin = () => {
                         ))}
                     </div>
 
-                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <div className="mt-6 p-4 bg-red-50 rounded-lg">
                         <div className="flex justify-between items-center">
                             <div>
                                 <span className="font-medium">Total Potential Savings:</span>
-                                <p className="text-sm text-blue-600">
+                                <p className="text-sm text-red-600">
                                     {enhancedTestResults.filter(r => r.isApplicable).length} of {enhancedTestResults.length} offers are applicable
                                 </p>
                             </div>
-                            <div className="text-3xl font-bold text-blue-600">
+                            <div className="text-3xl font-bold text-red-600">
                                 {enhancedTestResults
                                     .filter(r => r.isApplicable)
                                     .reduce((sum, r) => sum + (r.discountAmount || 0), 0)
@@ -3602,7 +3773,7 @@ const CompleteOffersAdmin = () => {
                     </h3>
 
                     {/* Summary Card */}
-                    <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border">
+                    <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-red-50 rounded-lg border">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
                             <div>
                                 <div className="text-2xl font-bold text-purple-600">{stackingTestResults.applicableCount}</div>
@@ -3617,7 +3788,7 @@ const CompleteOffersAdmin = () => {
                                 <div className="text-sm text-gray-600">Original Price</div>
                             </div>
                             <div>
-                                <div className="text-2xl font-bold text-blue-600">{stackingTestResults.finalPrice.toFixed(2)} JOD</div>
+                                <div className="text-2xl font-bold text-red-600">{stackingTestResults.finalPrice.toFixed(2)} JOD</div>
                                 <div className="text-sm text-gray-600">Final Price</div>
                             </div>
                         </div>
@@ -3730,9 +3901,9 @@ const CompleteOffersAdmin = () => {
                     </div>
 
                     {/* Stacking Information */}
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <div className="mt-4 p-3 bg-red-50 rounded-lg">
                         <h5 className="font-medium text-blue-800 mb-2">📚 How Stacking Works:</h5>
-                        <div className="text-sm text-blue-700 space-y-1">
+                        <div className="text-sm text-red-700 space-y-1">
                             <div>• Offers are processed by priority (highest first)</div>
                             <div>• Stackable offers can combine with others</div>
                             <div>• Non-stackable offers stop further processing</div>
@@ -3818,13 +3989,13 @@ const CompleteOffersAdmin = () => {
                                                         )}
                                                         {/* Show category name if available */}
                                                         {product.categoryId && (
-                                                            <span className="text-xs text-blue-500">
+                                                            <span className="text-xs text-red-500">
                                         {categories.find(c => c.id === product.categoryId)?.name || 'Category'}
                                     </span>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <Plus className="w-5 h-5 text-blue-600" />
+                                                <Plus className="w-5 h-5 text-red-600" />
                                             </div>
                                         </div>
                                     ))}
@@ -3838,83 +4009,355 @@ const CompleteOffersAdmin = () => {
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold">Offers Admin</h1>
-                <div className="flex items-center gap-2">
-                    {activeTab === 'list' && (
-                        <label className="flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={showCityOnlyOffers}
-                                onChange={(e) => setShowCityOnlyOffers(e.target.checked)}
-                                className="rounded"
-                            />
-                            <span className="font-medium">City-wide offers only</span>
-                            <span className="text-gray-500">(Order level)</span>
-                        </label>
-                    )}
-                    <button
-                        onClick={() => setActiveTab('list')}
-                        className={`px-3 py-1.5 rounded border ${activeTab==='list' ? 'bg-gray-100' : ''}`}
-                    >List</button>
-                    <button
-                        onClick={() => setActiveTab('test')}
-                        className={`px-3 py-1.5 rounded border ${activeTab==='test' ? 'bg-gray-100' : ''}`}
-                    >Test Orders</button>
-                    <button
-                        onClick={() => setActiveTab('analytics')}
-                        className={`px-3 py-1.5 rounded border ${activeTab==='analytics' ? 'bg-gray-100' : ''}`}
-                    >Analytics</button>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                        <Plus className="w-4 h-4"/> New Offer
-                    </button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Your existing header section */}
+            <div className="mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Offers Management</h1>
+                    <p className="text-gray-600 mt-1 p-4">Create, manage, and test promotional offers</p>
+                </div>
+                <div className="flex items-center justify-center mb-6">
+
+                    <div className="flex items-center gap-3">
+                        {/* Stats Cards */}
+                        <div className="flex items-center gap-4 mr-6">
+                            <div className="text-center px-3 py-2 bg-blue-50 rounded-lg">
+                                <div className="text-sm font-semibold text-blue-600">{offers.length}</div>
+                                <div className="text-sm text-blue-500">Total</div>
+                            </div>
+                            <div className="text-center px-3 py-2 bg-green-50 rounded-lg">
+                                <div className="text-sm font-semibold text-green-600">
+                                    {offers.filter(o => o.isActive).length}
+                                </div>
+                                <div className="text-sm text-green-500">Active</div>
+                            </div>
+                        </div>
+                        {activeTab === 'list' && (
+                            <label className="flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={showCityOnlyOffers}
+                                    onChange={(e) => setShowCityOnlyOffers(e.target.checked)}
+                                    className="rounded"
+                                />
+                                <span className="font-medium">Order level Offers</span>
+                            </label>
+                        )}
+
+                        {/* Enhanced Tab Navigation - Equal Width */}
+                        <div className="grid grid-cols-4 gap-1 p-1 bg-gray-100 rounded-lg w-full max-w-md">
+                            <button
+                                onClick={() => setActiveTab('list')}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+                                    activeTab === 'list'
+                                        ? 'bg-white text-red-600 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <Layers className="w-3 h-3 mx-auto mb-1" />
+                                Offers List
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('test')}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+                                    activeTab === 'test'
+                                        ? 'bg-white text-red-600 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <Play className="w-3 h-3 mx-auto mb-1" />
+                                Test Orders
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('analytics')}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+                                    activeTab === 'analytics'
+                                        ? 'bg-white text-red-600 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <BarChart className="w-3 h-3 mx-auto mb-1" />
+                                Analytics
+                            </button>
+                            <button
+                                onClick={() => setShowCreateModal(true)}
+                                className="px-3 py-2 rounded-md text-sm font-medium transition-all text-center bg-red-600 shadow-sm text-white"
+                            >
+                                <Plus className="w-3 h-3 mx-auto mb-1" />
+                                New Offer
+                            </button>
+                            
+                        </div>
+                    </div>
+                    
+
                 </div>
             </div>
 
-            {/* Content */}
-            {activeTab === 'list' ? (
-                <div className="space-y-4">
-                    {/* FILTER INFO */}
-                    {showCityOnlyOffers && (
-                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
-                            <div className="flex items-center gap-2">
-                                <span className="text-purple-800 font-medium">🏙️ Showing city-wide offers only</span>
-                                <span className="text-purple-600 text-sm">
-                        (Order-level offers that apply to entire cities)
-                    </span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* OFFERS GRID */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {offers
-                            .filter(offer => {
-                                if (!showCityOnlyOffers) return true;
-                                return isOrderLevelOffer(offer);
-                            })
-                            .map(o => <OfferCard key={o.offerId} offer={o} />)}
-                        {offers.filter(offer => {
-                            if (!showCityOnlyOffers) return true;
-                            return isOrderLevelOffer(offer);
-                        }).length === 0 && (
-                            <div className="col-span-full text-center text-gray-500 p-8 border rounded-lg">
-                                {showCityOnlyOffers ? 'No city-wide offers found' : 'No offers yet'}
+            {/* EQUAL WIDTH CONTENT CONTAINER */}
+            <div className="grid grid-cols-1 gap-6 min-h-[600px]">
+                {/* List Tab Content */}
+                {activeTab === 'list' && (
+                    <div className="w-full">
+                        
+                        {/* Filter Info */}
+                        {showCityOnlyOffers && (
+                            <div className="mb-6 p-3 bg-purple-50 border border-purple-200 rounded-md">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-purple-800 font-medium">🏙️ Showing city-wide offers only</span>
+                                    <span className="text-purple-600 text-sm">
+                                    (Order-level offers that apply to entire cities)
+                                </span>
+                                </div>
                             </div>
                         )}
-                    </div>
-                </div>
-            ) : activeTab === 'test' ? (
-                renderEnhancedTestOrderTab()
-            ) : (
-                <div className="p-6 border rounded-lg bg-white text-gray-600">Analytics placeholder</div>
-            )}
 
+                        {/* Offers Grid - Full Width */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {offers
+                                .filter(offer => {
+                                    if (!showCityOnlyOffers) return true;
+                                    return isOrderLevelOffer(offer);
+                                })
+                                .map(o => <OfferCard key={o.offerId} offer={o} />)}
+
+                            {offers.filter(offer => {
+                                if (!showCityOnlyOffers) return true;
+                                return isOrderLevelOffer(offer);
+                            }).length === 0 && (
+                                <div className="col-span-full text-center text-gray-500 p-12 border-2 border-dashed border-gray-300 rounded-xl">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                                            <Gift className="w-8 h-8 text-gray-400" />
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-gray-600">
+                                            {showCityOnlyOffers ? 'No city-wide offers found' : 'No offers created yet'}
+                                        </h3>
+                                        <p className="text-gray-500 max-w-md">
+                                            {showCityOnlyOffers
+                                                ? 'Create order-level offers that apply to entire cities to see them here.'
+                                                : 'Start by creating your first promotional offer to boost sales and engagement.'
+                                            }
+                                        </p>
+                                        {!showCityOnlyOffers && (
+                                            <button
+                                                onClick={() => setShowCreateModal(true)}
+                                                className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Create First Offer
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Test Tab Content */}
+                {activeTab === 'test' && (
+                    <div className="w-full">
+                        <div className="space-y-6">
+                            {/* Test Configuration */}
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                    <Settings className="w-5 h-5 text-red-600" />
+                                    Test Configuration
+                                </h3>
+                                {renderEnhancedTestOrderTab()}
+                            </div>
+
+                            {/* Order Items */}
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                                        <Package className="w-5 h-5 text-red-600" />
+                                        Order Items
+                                    </h3>
+                                    {enhancedTestConfig.restaurantId && (
+                                        <button
+                                            onClick={() => setShowItemSelector(true)}
+                                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Add Item
+                                        </button>
+                                    )}
+                                </div>
+
+                                {!enhancedTestConfig.restaurantId && (
+                                    <div className="text-center py-12 text-gray-500">
+                                        <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                        <h4 className="text-lg font-medium mb-2">Select a restaurant first</h4>
+                                        <p>Choose a restaurant from the configuration above to start adding items to your test order.</p>
+                                    </div>
+                                )}
+
+                                {enhancedOrderItems.length === 0 && enhancedTestConfig.restaurantId && (
+                                    <div className="text-center py-12 text-gray-500">
+                                        <Tag className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                        <h4 className="text-lg font-medium mb-2">No items added yet</h4>
+                                        <p>Click "Add Item" to start building your test order.</p>
+                                    </div>
+                                )}
+
+                                {/* Order Items List */}
+                                <div className="space-y-4">
+                                    {enhancedOrderItems.map((item, index) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+                                                <div>
+                                                    <span className="font-medium text-sm">{item.name}</span>
+                                                    <div className="text-xs text-gray-600 space-y-1">
+                                                        <div>Product ID: {item.productId}</div>
+                                                        <div>Category ID: {item.categoryId}</div>
+                                                        {item.categoryName && (
+                                                            <div className="text-red-600">Category: {item.categoryName}</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 mb-1">Price (₪)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={item.price}
+                                                        onChange={(e) => updateEnhancedOrderItem(index, 'price', parseFloat(e.target.value) || 0)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                                        step="0.5"
+                                                        min="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 mb-1">Quantity</label>
+                                                    <input
+                                                        type="number"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateEnhancedOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                                        min="1"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-gray-600">Total</span>
+                                                    <span className="block text-sm font-medium text-green-600">
+                                                    {item.total.toFixed(2)} ₪
+                                                </span>
+                                                </div>
+                                                <div>
+                                                    <button
+                                                        onClick={() => removeEnhancedOrderItem(index)}
+                                                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm transition-colors"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Test Results */}
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                                        <Play className="w-5 h-5 text-red-600" />
+                                        Test Results
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={runEnhancedTests}
+                                            disabled={enhancedLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                                        >
+                                            {enhancedLoading ? (
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Play className="w-4 h-4" />
+                                            )}
+                                            {enhancedLoading ? 'Testing...' : 'Run Tests'}
+                                        </button>
+                                        <button
+                                            onClick={testOfferStacking}
+                                            disabled={stackingTestLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
+                                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                                        >
+                                            {stackingTestLoading ? (
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            ) : (
+                                                <Layers className="w-4 h-4" />
+                                            )}
+                                            {stackingTestLoading ? 'Testing...' : 'Test Stacking'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {enhancedTestResults.length === 0 && !enhancedLoading && (
+                                    <div className="text-center py-12 text-gray-500">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Play className="w-8 h-8 text-gray-400" />
+                                        </div>
+                                        <h4 className="text-lg font-medium mb-2">No test results yet</h4>
+                                        <p>Configure your test order and click "Run Tests" to see results.</p>
+                                    </div>
+                                )}
+
+                                {/* Your existing test results rendering */}
+                                {enhancedTestResults.length > 0 && (
+                                    <div className="space-y-4">
+                                        {/* Your existing results JSX */}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Analytics Tab Content */}
+                {activeTab === 'analytics' && (
+                    <div className="w-full">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 min-h-[500px]">
+                            <div className="text-center py-16">
+                                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <BarChart className="w-10 h-10 text-gray-400" />
+                                </div>
+                                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Analytics Dashboard</h3>
+                                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                                    Comprehensive analytics and reporting for your offers performance, customer engagement, and revenue impact.
+                                </p>
+
+                                {/* Analytics Preview Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                                    <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl border border-red-200">
+                                        <div className="text-3xl font-bold text-red-600 mb-2">42</div>
+                                        <div className="text-sm text-red-800 font-medium">Total Offers</div>
+                                        <div className="text-xs text-red-600 mt-1">+12% this month</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200">
+                                        <div className="text-3xl font-bold text-green-600 mb-2">₪15,430</div>
+                                        <div className="text-sm text-green-800 font-medium">Total Savings</div>
+                                        <div className="text-xs text-green-600 mt-1">+28% this month</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200">
+                                        <div className="text-3xl font-bold text-blue-600 mb-2">1,247</div>
+                                        <div className="text-sm text-blue-800 font-medium">Customer Usage</div>
+                                        <div className="text-xs text-blue-600 mt-1">+18% this month</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg inline-block">
+                                    <p className="text-sm text-yellow-800">
+                                        <strong>Coming Soon:</strong> Advanced analytics dashboard with detailed insights, charts, and reporting features.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Your existing modal */}
             {showCreateModal && renderOfferForm()}
         </div>
     );

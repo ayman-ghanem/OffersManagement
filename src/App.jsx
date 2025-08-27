@@ -6,7 +6,8 @@ import CompleteOffersAdmin from './components/CompleteOffersAdmin';
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import './index.css'   // ← important
+import './index.css'
+import MainApp from "./components/MainApp.js";   // ← important
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />)
 
@@ -43,5 +44,5 @@ function App() {
 export default App
 */
 export default function App() {
-    return <CompleteOffersAdmin />;
+    return <MainApp />;
 }
