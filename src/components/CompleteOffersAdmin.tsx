@@ -26,8 +26,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    //const API_BASE_URL = 'http://localhost:5159';
+    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    const API_BASE_URL = 'http://localhost:5159';
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -544,16 +544,6 @@ const CompleteOffersAdmin = () => {
             {(formData.offerType === 3 || formData.offerType === 4 ||
                 ([5, 6, 7, 9].includes(formData.offerType) && subOfferType === 'order')) && (
                 <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-orange-800">Quick Select by City</h4>
-                        <button
-                            type="button"
-                            onClick={() => setShowCitySelector(!showCitySelector)}
-                            className="text-orange-600 text-sm"
-                        >
-                            {showCitySelector ? 'Hide' : 'Show'} Cities
-                        </button>
-                    </div>
 
                     {showCitySelector && (
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -774,7 +764,25 @@ const CompleteOffersAdmin = () => {
 
                 if (response.ok) {
                     const results = await response.json();
-                    setEnhancedTestResults(results);
+                    const normalizedResults = results.map(result => {
+                        // Try to find the offer from multiple possible locations
+                        let offer = result.offer ||
+                            result.details ||
+                            offers.find(o => o.offerId === result.offerId) ||
+                            offers.find(o => o.offerId === result.details?.offerId);
+
+                        return {
+                            ...result,
+                            offer: offer || {
+                                offerId: result.offerId || 'unknown',
+                                name: result.offerName || result.details?.offerName || 'Unknown Offer',
+                                offerType: result.offerType || result.details?.offerType || 1,
+                                discountType: result.discountType || result.details?.discountType || 1,
+                                discountValue: result.discountValue || result.details?.discountValue || 0
+                            }
+                        };
+                    });
+                    setEnhancedTestResults(normalizedResults);
                 } else {
                     throw new Error('Failed to test multiple offers');
                 }
@@ -805,9 +813,10 @@ const CompleteOffersAdmin = () => {
                         if (response.ok) {
                             const result = await response.json();
                             results.push({
-                                offer: offer,
-                                ...result
+                                ...result,
+                                offer: offer // Ensure offer data is always present
                             });
+
                         } else {
                             results.push({
                                 offer: offer,
@@ -826,7 +835,12 @@ const CompleteOffersAdmin = () => {
                     }
                 }
 
-                setEnhancedTestResults(results);
+                //const raw = await response.json();
+                const normalized = results.map(r => ({
+                    ...r,
+                    offer: offers.find(o => o.offerId === (r?.details?.offerId ?? r?.offerId)) || null
+                }));
+                setEnhancedTestResults(normalized);
             }
         } catch (error) {
             console.error('Error running enhanced tests:', error);
@@ -934,20 +948,19 @@ const CompleteOffersAdmin = () => {
         if (!enhancedTestConfig.restaurantId) return offers;
 
         return offers.filter(offer => {
-            // Check if offer applies to the selected restaurant
-            const appliesToRestaurant = offer.restaurantIds?.includes(enhancedTestConfig.restaurantId) ||
-                offer.restaurantIds?.length === 0;
+            const rIds = offer.restaurantIds ?? offer.RestaurantIds ?? [];
+            const rBranches = offer.restaurantBranches ?? offer.RestaurantBranches ?? [];
 
+            const appliesToRestaurant = rIds.includes(enhancedTestConfig.restaurantId) || rIds.length === 0;
             if (!appliesToRestaurant) return false;
 
-            // If branch is selected, check if offer applies to the specific branch
-            if (enhancedTestConfig.branchId && offer.restaurantBranches?.length > 0) {
-                return offer.restaurantBranches.some(rb =>
-                    rb.id === enhancedTestConfig.restaurantId &&
-                    rb.branchId === enhancedTestConfig.branchId
-                );
+            if (enhancedTestConfig.branchId && rBranches.length > 0) {
+                return rBranches.some(rb => {
+                    const rid = rb.id ?? rb.Id ?? rb.restaurantId;
+                    const bid = rb.branchId ?? rb.BranchId ?? rb.branchID;
+                    return rid === enhancedTestConfig.restaurantId && bid === enhancedTestConfig.branchId;
+                });
             }
-
             return true;
         });
     };
@@ -4158,159 +4171,8 @@ const CompleteOffersAdmin = () => {
                 {/* Test Tab Content */}
                 {activeTab === 'test' && (
                     <div className="w-full">
-                        <div className="space-y-6">
-                            {/* Test Configuration */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                    <Settings className="w-5 h-5 text-red-600" />
-                                    Test Configuration
-                                </h3>
-                                {renderEnhancedTestOrderTab()}
-                            </div>
-
-                            {/* Order Items */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <Package className="w-5 h-5 text-red-600" />
-                                        Order Items
-                                    </h3>
-                                    {enhancedTestConfig.restaurantId && (
-                                        <button
-                                            onClick={() => setShowItemSelector(true)}
-                                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-colors"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            Add Item
-                                        </button>
-                                    )}
-                                </div>
-
-                                {!enhancedTestConfig.restaurantId && (
-                                    <div className="text-center py-12 text-gray-500">
-                                        <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                        <h4 className="text-lg font-medium mb-2">Select a restaurant first</h4>
-                                        <p>Choose a restaurant from the configuration above to start adding items to your test order.</p>
-                                    </div>
-                                )}
-
-                                {enhancedOrderItems.length === 0 && enhancedTestConfig.restaurantId && (
-                                    <div className="text-center py-12 text-gray-500">
-                                        <Tag className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                        <h4 className="text-lg font-medium mb-2">No items added yet</h4>
-                                        <p>Click "Add Item" to start building your test order.</p>
-                                    </div>
-                                )}
-
-                                {/* Order Items List */}
-                                <div className="space-y-4">
-                                    {enhancedOrderItems.map((item, index) => (
-                                        <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                                                <div>
-                                                    <span className="font-medium text-sm">{item.name}</span>
-                                                    <div className="text-xs text-gray-600 space-y-1">
-                                                        <div>Product ID: {item.productId}</div>
-                                                        <div>Category ID: {item.categoryId}</div>
-                                                        {item.categoryName && (
-                                                            <div className="text-red-600">Category: {item.categoryName}</div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs text-gray-600 mb-1">Price (₪)</label>
-                                                    <input
-                                                        type="number"
-                                                        value={item.price}
-                                                        onChange={(e) => updateEnhancedOrderItem(index, 'price', parseFloat(e.target.value) || 0)}
-                                                        className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                                                        step="0.5"
-                                                        min="0"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs text-gray-600 mb-1">Quantity</label>
-                                                    <input
-                                                        type="number"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateEnhancedOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                                                        className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                                                        min="1"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-gray-600">Total</span>
-                                                    <span className="block text-sm font-medium text-green-600">
-                                                    {item.total.toFixed(2)} ₪
-                                                </span>
-                                                </div>
-                                                <div>
-                                                    <button
-                                                        onClick={() => removeEnhancedOrderItem(index)}
-                                                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm transition-colors"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Test Results */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <Play className="w-5 h-5 text-red-600" />
-                                        Test Results
-                                    </h3>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={runEnhancedTests}
-                                            disabled={enhancedLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
-                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                                        >
-                                            {enhancedLoading ? (
-                                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <Play className="w-4 h-4" />
-                                            )}
-                                            {enhancedLoading ? 'Testing...' : 'Run Tests'}
-                                        </button>
-                                        <button
-                                            onClick={testOfferStacking}
-                                            disabled={stackingTestLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
-                                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                                        >
-                                            {stackingTestLoading ? (
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            ) : (
-                                                <Layers className="w-4 h-4" />
-                                            )}
-                                            {stackingTestLoading ? 'Testing...' : 'Test Stacking'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {enhancedTestResults.length === 0 && !enhancedLoading && (
-                                    <div className="text-center py-12 text-gray-500">
-                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Play className="w-8 h-8 text-gray-400" />
-                                        </div>
-                                        <h4 className="text-lg font-medium mb-2">No test results yet</h4>
-                                        <p>Configure your test order and click "Run Tests" to see results.</p>
-                                    </div>
-                                )}
-
-                                {/* Your existing test results rendering */}
-                                {enhancedTestResults.length > 0 && (
-                                    <div className="space-y-4">
-                                        {/* Your existing results JSX */}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        {/* Keep only this: */}
+                        {renderEnhancedTestOrderTab()}
                     </div>
                 )}
 
