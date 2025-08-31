@@ -26,8 +26,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    const API_BASE_URL = 'http://localhost:5159';
+    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    //const API_BASE_URL = 'http://localhost:5159';
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -101,7 +101,7 @@ const CompleteOffersAdmin = () => {
 
     const [enhancedTestConfig, setEnhancedTestConfig] = useState({
         selectedOffers: [],
-        userId: '48e6f6e7-e2eb-4771-99fd-eca1fef0a161',
+        userId: '022b5474-db3d-47eb-9d5d-cf7880ee194f',
         restaurantId: '',
         branchId: '',
         deliveryFee: 10,
@@ -256,10 +256,47 @@ const CompleteOffersAdmin = () => {
 
             if (response.ok) {
                 const results = await response.json();
-                console.log('🎯 Raw API results:', results);
+                // Filter out inactive expired offers before stacking
+                const activeResults = results.filter(result => {
+                    const offer = offers.find(o =>
+                        o.offerId === (result.offerId || result.details?.offerId)
+                    );
+
+                    if (!offer) return false;
+
+                    const isExpired = offer.endDate && new Date(offer.endDate) < new Date();
+                    const isInactive = !offer.isActive;
+
+                    if (isInactive || isExpired) {
+                        console.log(`Excluding ${isInactive ? 'inactive' : 'expired'} offer from stacking:`, offer.name);
+                        return false;
+                    }
+                    return true;
+                });
+
+                // Process only active offers for stacking
+                const normalizedResults = activeResults.map(result => {
+                    const offer = offers.find(o =>
+                        o.offerId === (result.offerId || result.details?.offerId)
+                    );
+
+                    return {
+                        ...result,
+                        details: {
+                            ...result.details,
+                            offerId: result.offerId || result.details?.offerId,
+                            offerName: offer?.name || result.details?.offerName || 'Unknown Offer',
+                            name: offer?.name || result.details?.offerName || 'Unknown Offer',
+                            offerType: offer?.offerType || result.details?.offerType || 1,
+                            priority: offer?.priority || result.details?.priority || 1,
+                            isStackable: offer?.isStackable !== undefined ? offer.isStackable : (result.details?.isStackable !== false)
+                        },
+                        offer: offer
+                    };
+                });
 
                 // Apply stacking logic to the results
-                const stackedResults = applyStackingLogic(results);
+                const stackedResults = applyStackingLogic(normalizedResults);
                 console.log('🔄 After stacking logic:', stackedResults);
 
                 const orderTotal = enhancedOrderItems.reduce((sum, item) => sum + item.total, 0);
@@ -285,6 +322,7 @@ const CompleteOffersAdmin = () => {
         } finally {
             setStackingTestLoading(false);
         }
+        
     };
 
     const removeEnhancedOrderItem = (index) => {
@@ -764,24 +802,44 @@ const CompleteOffersAdmin = () => {
 
                 if (response.ok) {
                     const results = await response.json();
-                    const normalizedResults = results.map(result => {
-                        // Try to find the offer from multiple possible locations
-                        let offer = result.offer ||
-                            result.details ||
-                            offers.find(o => o.offerId === result.offerId) ||
-                            offers.find(o => o.offerId === result.details?.offerId);
+                    const normalizedResults = results
+                        .map(result => {
+                            const offer = offers.find(o =>
+                                o.offerId === (result.offerId || result.details?.offerId)
+                            );
 
-                        return {
-                            ...result,
-                            offer: offer || {
-                                offerId: result.offerId || 'unknown',
-                                name: result.offerName || result.details?.offerName || 'Unknown Offer',
-                                offerType: result.offerType || result.details?.offerType || 1,
-                                discountType: result.discountType || result.details?.discountType || 1,
-                                discountValue: result.discountValue || result.details?.discountValue || 0
+                            // Check if offer is active and not expired
+                            const isExpired = offer?.endDate && new Date(offer.endDate) < new Date();
+                            const isInactive = !offer?.isActive;
+
+                            return {
+                                ...result,
+                                offer: offer,
+                                isInactive: isInactive,
+                                isExpired: isExpired,
+                                shouldSkip: isInactive || isExpired
+                            };
+                        })
+                        .filter(result => {
+                            if (result.shouldSkip) {
+                                console.log(`Skipping ${result.isInactive ? 'inactive' : 'expired'} offer:`, result.offer?.name);
+                                return false;
                             }
-                        };
-                    });
+                            return true;
+                        })
+                        .map(result => ({
+                            isApplicable: result.isApplicable || false,
+                            message: result.message || 'No message provided',
+                            discountAmount: result.discountAmount || 0,
+                            offerId: result.offerId || result.details?.offerId,
+                            offer: result.offer || {
+                                offerId: result.offerId || 'unknown',
+                                name: result.details?.offerName || 'Unknown Offer',
+                                offerType: result.details?.offerType || 1,
+                                discountType: result.details?.discountType || 1,
+                                discountValue: result.details?.discountValue || 0
+                            }
+                        }));
                     setEnhancedTestResults(normalizedResults);
                 } else {
                     throw new Error('Failed to test multiple offers');
@@ -789,15 +847,19 @@ const CompleteOffersAdmin = () => {
             } else {
                 // Test selected offers individually
                 const results = [];
-                const offersToTest = enhancedTestConfig.selectedOffers.length > 0
+                const offersToTest = (enhancedTestConfig.selectedOffers.length > 0
                     ? offers.filter(o => enhancedTestConfig.selectedOffers.includes(o.offerId))
-                    : offers.filter(o =>
-                        o.restaurantIds?.includes(enhancedTestConfig.restaurantId) &&
-                        o.restaurantBranches?.some(rb =>
-                            rb.id === enhancedTestConfig.restaurantId &&
-                            rb.branchId === enhancedTestConfig.branchId
-                        )
-                    );
+                    : getApplicableOffers())
+                    .filter(offer => {
+                        const isExpired = offer.endDate && new Date(offer.endDate) < new Date();
+                        const isInactive = !offer.isActive;
+
+                        if (isInactive || isExpired) {
+                            console.log(`Skipping ${isInactive ? 'inactive' : 'expired'} offer:`, offer.name);
+                            return false;
+                        }
+                        return true;
+                    });
 
                 for (const offer of offersToTest) {
                     try {
@@ -962,9 +1024,13 @@ const CompleteOffersAdmin = () => {
                 });
             }
             return true;
+        }).sort((a, b) => {
+            // Sort active offers first
+            if (a.isActive && !b.isActive) return -1;
+            if (!a.isActive && b.isActive) return 1;
+            return 0;
         });
     };
-
     
     const [restaurantSearch, setRestaurantSearch] = useState('');
     const [productSearch, setProductSearch] = useState('');
@@ -2041,12 +2107,19 @@ const CompleteOffersAdmin = () => {
                         value={enhancedTestConfig.userId}
                         onChange={(e) => setEnhancedTestConfig(prev => ({ ...prev, userId: e.target.value }))}
                         className="w-full p-2 border rounded-md"
-                        placeholder="48e6f6e7-e2eb-4771-99fd-eca1fef0a161"
+                        placeholder="022b5474-db3d-47eb-9d5d-cf7880ee194f"
                     />
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Restaurant</label>
+                    <input
+                        type="text"
+                        placeholder="Search restaurants..."
+                        value={restaurantSearch}
+                        onChange={(e) => setRestaurantSearch(e.target.value)}
+                        className="w-full p-2 border rounded-md mb-2 text-sm"
+                    />
                     <select
                         value={enhancedTestConfig.restaurantId}
                         onChange={(e) => {
@@ -2066,11 +2139,17 @@ const CompleteOffersAdmin = () => {
                         className="w-full p-2 border rounded-md"
                     >
                         <option value="">Select Restaurant</option>
-                        {getUniqueRestaurants().map(restaurant => (
-                            <option key={restaurant.id} value={restaurant.id}>
-                                {restaurant.name}
-                            </option>
-                        ))}
+                        {getUniqueRestaurants()
+                            .filter(restaurant =>
+                                !restaurantSearch ||
+                                restaurant.name.toLowerCase().includes(restaurantSearch.toLowerCase()) ||
+                                (restaurant.nameEn && restaurant.nameEn.toLowerCase().includes(restaurantSearch.toLowerCase()))
+                            )
+                            .map(restaurant => (
+                                <option key={restaurant.id} value={restaurant.id}>
+                                    {restaurant.name}
+                                </option>
+                            ))}
                     </select>
                 </div>
 
@@ -2944,9 +3023,9 @@ const CompleteOffersAdmin = () => {
         const isOrderLevel = isOrderLevelOffer(offer);
 
         return (
-            <div className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col h-full">
                 {/* Header with Status */}
-                <div className="p-5 border-b border-gray-100">
+                <div className="p-5 border-b border-gray-100 flex-grow">
                     <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                             <div className={`p-2.5 rounded-xl ${
@@ -3583,92 +3662,169 @@ const CompleteOffersAdmin = () => {
                     </div>
                 )}
 
-                {enhancedOrderItems.map((item, index) => (
-                    <div key={index} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                            <div>
-                                <span className="font-medium text-sm">{item.name}</span>
-                                <div className="text-xs text-gray-600 space-y-1">
-                                    <div>Product ID: {item.productId}</div>
-                                    <div>Category ID: {item.categoryId}</div>
-                                    {item.categoryName && (
-                                        <div className="text-red-600">Category: {item.categoryName}</div>
-                                    )}
+                {/* Order Items List */}
+                <div className="space-y-3">
+                    {enhancedOrderItems.map((item, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                            {/* Item Header */}
+                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                                            <Tag className="w-4 h-4 text-red-600" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                                                <span>Product ID: {item.productId}</span>
+                                                {item.categoryId && <span>Category: {item.categoryName || item.categoryId}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => removeEnhancedOrderItem(index)}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Remove item"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-xs text-gray-600 mb-1">Price (شيقل)</label>
-                                <input
-                                    type="number"
-                                    value={item.price}
-                                    onChange={(e) => updateEnhancedOrderItem(index, 'price', parseFloat(e.target.value) || 0)}
-                                    className="w-full p-1 border rounded text-sm"
-                                    step="0.5"
-                                    min="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs text-gray-600 mb-1">Quantity</label>
-                                <input
-                                    type="number"
-                                    value={item.quantity}
-                                    onChange={(e) => updateEnhancedOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                                    className="w-full p-1 border rounded text-sm"
-                                    min="1"
-                                />
-                            </div>
-                            <div>
-                                <span className="text-xs text-gray-600">Total</span>
-                                <span className="block text-sm font-medium text-green-600">
-                    {item.total.toFixed(2)} شيقل
-                </span>
-                            </div>
-                            <div>
-                                <button
-                                    onClick={() => removeEnhancedOrderItem(index)}
-                                    className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
+
+                            {/* Item Controls */}
+                            <div className="p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Unit Price
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={item.price}
+                                                onChange={(e) => updateEnhancedOrderItem(index, 'price', parseFloat(e.target.value) || 0)}
+                                                className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 pr-8"
+                                                step="0.5"
+                                                min="0"
+                                            />
+                                            <span className="absolute right-2 top-2 text-xs text-gray-500">₪</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Quantity
+                                        </label>
+                                        <div className="flex items-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => updateEnhancedOrderItem(index, 'quantity', Math.max(1, item.quantity - 1))}
+                                                className="p-2 border border-gray-300 rounded-l-md hover:bg-gray-50"
+                                            >
+                                                <Minus className="w-3 h-3" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                value={item.quantity}
+                                                onChange={(e) => updateEnhancedOrderItem(index, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                                                className="w-16 p-2 border-t border-b border-gray-300 text-center text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                                min="1"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => updateEnhancedOrderItem(index, 'quantity', item.quantity + 1)}
+                                                className="p-2 border border-gray-300 rounded-r-md hover:bg-gray-50"
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Line Total
+                                        </label>
+                                        <div className="p-2 bg-green-50 border border-green-200 rounded-md">
+                            <span className="text-lg font-bold text-green-600">
+                                {item.total.toFixed(2)} ₪
+                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-right">
+                                        <div className="text-xs text-gray-500 mb-1">Calculation</div>
+                                        <div className="text-sm text-gray-600">
+                                            {item.price.toFixed(2)} × {item.quantity} = {item.total.toFixed(2)} ₪
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    ))}
+
+                    {/* Order Summary */}
+                    {enhancedOrderItems.length > 0 && (
+                        <div className="border-t-2 border-gray-200 pt-4">
+                            <div className="bg-blue-50 rounded-lg p-4">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h4 className="font-semibold text-gray-900">Order Summary</h4>
+                                        <p className="text-sm text-gray-600">{enhancedOrderItems.length} items total</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-sm text-gray-600">Subtotal</div>
+                                        <div className="text-2xl font-bold text-blue-600">
+                                            {enhancedOrderItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)} ₪
+                                        </div>
+                                        {enhancedTestConfig.deliveryFee > 0 && (
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                + {enhancedTestConfig.deliveryFee.toFixed(2)} ₪ delivery
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
+            {/* Available Offers */}
             {/* Available Offers */}
             <div className="bg-white rounded-lg border p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold">Available Offers</h3>
-                    <button
-                        onClick={runEnhancedTests}
-                        disabled={enhancedLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                        {enhancedLoading ? (
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Play className="w-4 h-4" />
-                        )}
-                        {enhancedLoading ? 'Testing...' : 'Run Tests'}
-                    </button>
-                    <button
-                        onClick={testOfferStacking}
-                        disabled={stackingTestLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                        {stackingTestLoading ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                Testing Stacking...
-                            </>
-                        ) : (
-                            <>
-                                <Layers className="w-4 h-4" />
-                                Test Offer Stacking
-                            </>
-                        )}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={runEnhancedTests}
+                            disabled={enhancedLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {enhancedLoading ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Play className="w-4 h-4" />
+                            )}
+                            {enhancedLoading ? 'Testing...' : 'Run Tests'}
+                        </button>
+                        <button
+                            onClick={testOfferStacking}
+                            disabled={stackingTestLoading || !enhancedTestConfig.restaurantId || enhancedOrderItems.length === 0}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {stackingTestLoading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Testing Stacking...
+                                </>
+                            ) : (
+                                <>
+                                    <Layers className="w-4 h-4" />
+                                    Test Offer Stacking
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 {enhancedTestConfig.testMode === 'single' && (
@@ -3678,32 +3834,84 @@ const CompleteOffersAdmin = () => {
                 )}
 
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {getApplicableOffers().map(offer => (
-                        <div key={offer.offerId} className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                            enhancedTestConfig.selectedOffers.includes(offer.offerId)
-                                ? 'border-red-500 bg-red-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                             onClick={() => enhancedTestConfig.testMode === 'single' && toggleOfferSelection(offer.offerId)}
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2 flex-1">
-                                    {getOfferIcon(offer.offerType)}
-                                    <div>
-                                        <h4 className="font-medium text-sm">{offer.name}</h4>
-                                        <p className="text-xs text-gray-500">
-                                            {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
-                                            {offer.discountValue && ` • ${offer.discountValue}${offer.discountType === 1 ? '%' : ' شيقل'}`}
-                                        </p>
+                    {getApplicableOffers().map(offer => {
+                        const isExpired = offer.endDate && new Date(offer.endDate) < new Date();
+                        const isInactive = !offer.isActive;
+                        const showAsInactive = isInactive || isExpired;
+
+                        return (
+                            <div key={offer.offerId} className={`border rounded-lg p-3 transition-colors ${
+                                showAsInactive
+                                    ? 'border-gray-300 bg-gray-50 opacity-75'
+                                    : enhancedTestConfig.selectedOffers.includes(offer.offerId)
+                                        ? 'border-red-500 bg-red-50 cursor-pointer'
+                                        : 'border-gray-200 hover:border-gray-300 cursor-pointer'
+                            }`}
+                                 onClick={() => {
+                                     if (enhancedTestConfig.testMode === 'single' && !showAsInactive) {
+                                         toggleOfferSelection(offer.offerId);
+                                     }
+                                 }}
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <div className={`p-1 rounded ${showAsInactive ? 'opacity-50' : ''}`}>
+                                            {getOfferIcon(offer.offerType)}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className={`font-medium text-sm ${showAsInactive ? 'text-gray-500' : 'text-gray-900'}`}>
+                                                    {offer.name}
+                                                </h4>
+                                                {isInactive && (
+                                                    <span className="px-2 py-1 text-xs font-bold rounded-full bg-red-100 text-red-600">
+                                            INACTIVE
+                                        </span>
+                                                )}
+                                                {isExpired && !isInactive && (
+                                                    <span className="px-2 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-600">
+                                            EXPIRED
+                                        </span>
+                                                )}
+                                            </div>
+                                            <p className={`text-xs ${showAsInactive ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                {getOfferTypeName(offer.offerType)} • {getDiscountTypeName(offer.discountType)}
+                                                {offer.discountValue && ` • ${offer.discountValue}${offer.discountType === 1 ? '%' : ' شيقل'}`}
+                                            </p>
+                                            {showAsInactive && (
+                                                <p className="text-xs text-red-600 mt-1">
+                                                    {isExpired ? 'This offer has expired' : 'This offer is inactive'} - will not apply during testing
+                                                </p>
+                                            )}
+                                            {offer.endDate && !isExpired && (
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    Expires: {new Date(offer.endDate).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        {enhancedTestConfig.testMode === 'single' && enhancedTestConfig.selectedOffers.includes(offer.offerId) && (
+                                            <Check className="w-4 h-4 text-red-600" />
+                                        )}
+                                        {showAsInactive && (
+                                            <XCircle className="w-4 h-4 text-gray-400" />
+                                        )}
                                     </div>
                                 </div>
-
-                                {enhancedTestConfig.testMode === 'single' && enhancedTestConfig.selectedOffers.includes(offer.offerId) && (
-                                    <Check className="w-4 h-4 text-red-600" />
-                                )}
                             </div>
+                        );
+                    })}
+
+                    {getApplicableOffers().length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <Gift className="w-6 h-6 text-gray-400" />
+                            </div>
+                            <p>No offers found for this restaurant and branch combination.</p>
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
 
@@ -3773,6 +3981,20 @@ const CompleteOffersAdmin = () => {
                                     .reduce((sum, r) => sum + (r.discountAmount || 0), 0)
                                     .toFixed(2)} شيقل
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Add this after the test results */}
+            {enhancedTestResults.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-center gap-2">
+                        <div className="text-yellow-600">⚠️</div>
+                        <div>
+                            <h4 className="font-medium text-yellow-800">Testing Notes</h4>
+                            <p className="text-sm text-yellow-700">
+                                Only active, non-expired offers are tested. Inactive or expired offers are automatically excluded from test results.
+                            </p>
                         </div>
                     </div>
                 </div>
