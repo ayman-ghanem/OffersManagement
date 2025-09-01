@@ -579,9 +579,28 @@ const CompleteOffersAdmin = () => {
                 </div>
             )}
             {/* City Quick Select */}
+            {/* City Quick Select */}
             {(formData.offerType === 3 || formData.offerType === 4 ||
                 ([5, 6, 7, 9].includes(formData.offerType) && subOfferType === 'order')) && (
                 <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium text-orange-800">City-Wide Selection</h4>
+                        <button
+                            type="button"
+                            onClick={() => setShowCitySelector(!showCitySelector)}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                                showCitySelector
+                                    ? 'bg-orange-600 text-white'
+                                    : 'bg-orange-200 text-orange-800 hover:bg-orange-300'
+                            }`}
+                        >
+                            {showCitySelector ? 'Hide Cities' : 'Show Cities'}
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-orange-700 mb-3">
+                        For city-wide offers, you can quickly select all restaurants in specific cities.
+                    </p>
 
                     {showCitySelector && (
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -604,19 +623,18 @@ const CompleteOffersAdmin = () => {
                                                 'bg-white border-gray-300'
                                     }`}>
                                         <div className="text-center mb-2">
-                                            <div className="font-medium text-sm">📍 {city}</div>
+                                            <div className="font-medium text-sm">{city}</div>
                                             <div className="text-xs text-gray-600">
                                                 {totalBranches} branches
                                             </div>
                                             {selectedBranches > 0 && (
-                                                <div className="text-xs font-medium text-red-600">
+                                                <div className="text-xs font-medium text-blue-600">
                                                     {selectedBranches}/{totalBranches} selected
                                                 </div>
                                             )}
                                         </div>
 
                                         <div className="flex gap-1">
-                                            {/* SELECT ALL BUTTON */}
                                             <button
                                                 type="button"
                                                 onClick={() => selectAllRestaurantsInCity(city)}
@@ -630,7 +648,6 @@ const CompleteOffersAdmin = () => {
                                                 {isFullySelected ? 'All Selected' : 'Select All'}
                                             </button>
 
-                                            {/* DESELECT ALL BUTTON */}
                                             {selectedBranches > 0 && (
                                                 <button
                                                     type="button"
