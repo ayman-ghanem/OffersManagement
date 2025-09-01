@@ -26,8 +26,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    //const API_BASE_URL = 'http://localhost:5159';
+    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    const API_BASE_URL = 'http://localhost:5159';
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -64,6 +64,11 @@ const CompleteOffersAdmin = () => {
         dayOfWeek: [],
         startTime: null,
         endTime: null,
+
+        // NEW: Discount Application Flags (replaces separate Delivery offer type)
+        applyToOrderSubtotal: true,  // Default: apply to order items
+        applyToDeliveryFee: false,   // Optional: also apply to delivery
+        
         minItemQuantity: '',
         isComboOffer: false,
         comboItems: [],
@@ -77,24 +82,22 @@ const CompleteOffersAdmin = () => {
 
         Targets: []
     });
-    
+
     const offerTypes = [
-        { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products' },
-        { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories' },
-        { value: 3, label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order' },
-        { value: 4, label: 'Delivery', icon: <MapPin className="w-4 h-4" />, description: 'Discount on delivery fee' },
-        { value: 5, label: 'First Order', icon: <Users className="w-4 h-4" />, description: 'New customer specials (Product/Category/Order level)' },
-        { value: 6, label: 'Loyalty Tier', icon: <Award className="w-4 h-4" />, description: 'VIP rewards (Product/Category/Order level)' },
-        { value: 7, label: 'Time-Based', icon: <Clock className="w-4 h-4" />, description: 'Time restricted offers (Product/Category/Order level)' },
-        { value: 8, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers with restaurant-specific items' },
-        { value: 9, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers' }
+        { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products', enabled: true },
+        { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories', enabled: true },
+        { value: 3, label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order', enabled: true },
+        { value: 4, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers', enabled: true },
+        { value: 5, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers', enabled: true }
+        // REMOVED: Delivery, FirstOrder, LoyaltyTier, TimeSlot - these become constraint flags
     ];
 
+    // Update discount types array - remove FreeDelivery
     const discountTypes = [
         { value: 1, label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
         { value: 2, label: 'Fixed Amount (شيقل)', icon: <DollarSign className="w-4 h-4" /> },
-        { value: 3, label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> },
-        { value: 4, label: 'Free Delivery', icon: <MapPin className="w-4 h-4" /> }
+        { value: 3, label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> }
+        // REMOVED: FreeDelivery - handled by ApplyToDeliveryFee flag
     ];
     const userTiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -114,12 +117,8 @@ const CompleteOffersAdmin = () => {
             1: 'Product Specific',
             2: 'Category',
             3: 'Order Total',
-            4: 'Delivery',
-            5: 'First Order',
-            6: 'Loyalty Tier',
-            7: 'Time-Based',
-            8: 'Combo Deal',
-            9: 'Flash Sale'
+            4: 'Combo Deal',
+            5: 'Flash Sale'
         };
         return names[offerType] || 'Unknown';
     };
@@ -128,11 +127,42 @@ const CompleteOffersAdmin = () => {
         const names = {
             1: 'Percentage',
             2: 'Fixed Amount',
-            3: 'Buy X Get Y',
-            4: 'Free Delivery'
+            3: 'Buy X Get Y'
         };
         return names[discountType] || 'Unknown';
     };
+
+    // New helper to get constraint descriptions for display
+    const getConstraintDescriptions = (offer) => {
+        const constraints = [];
+
+        if (offer.isFirstOrderOnly) {
+            constraints.push('First-time customers only');
+        }
+
+        if (offer.restrictedToTiers && offer.restrictedToTiers.length > 0) {
+            constraints.push(`Loyalty: ${offer.restrictedToTiers.join(', ')}`);
+        }
+
+        if (offer.restrictedToDaysOfWeek && offer.restrictedToDaysOfWeek.length > 0) {
+            constraints.push(`Days: ${offer.restrictedToDaysOfWeek.join(', ')}`);
+        }
+
+        if (offer.restrictedStartTime && offer.restrictedEndTime) {
+            constraints.push(`Time: ${offer.restrictedStartTime} - ${offer.restrictedEndTime}`);
+        }
+
+        // Show discount application
+        const applications = [];
+        if (offer.applyToOrderSubtotal) applications.push('order');
+        if (offer.applyToDeliveryFee) applications.push('delivery');
+        if (applications.length > 0) {
+            constraints.push(`Applies to: ${applications.join(' + ')}`);
+        }
+
+        return constraints;
+    };
+    
     const [enhancedOrderItems, setEnhancedOrderItems] = useState([]);
     const [availableItems, setAvailableItems] = useState([]);
     const [itemSearch, setItemSearch] = useState('');
@@ -338,17 +368,14 @@ const CompleteOffersAdmin = () => {
         }));
     };
     const isOrderLevelOffer = (offer) => {
-        // Check if offer has no specific product/category targets
-        const hasNoTargets = !offer.targets || offer.targets.length === 0;
+        return offer.offerType === 3 || offer.applyToDeliveryFee;
+    };
 
-        // Check if it's order-level offer types (3=Order Total, 4=Delivery)
-        const isOrderType = [3, 4].includes(offer.offerType);
-
-        // Check if it's sub-targeted offer but set to 'order' level
-        const isSubOrderLevel = [5, 6, 7, 9].includes(offer.offerType) &&
-            (offer.subTargetType === 'order' || (!offer.subTargetType && hasNoTargets));
-
-        return isOrderType || isSubOrderLevel;
+    const hasConstraints = (offer) => {
+        return offer.isFirstOrderOnly ||
+            (offer.restrictedToTiers && offer.restrictedToTiers.length > 0) ||
+            (offer.restrictedToDaysOfWeek && offer.restrictedToDaysOfWeek.length > 0) ||
+            (offer.restrictedStartTime && offer.restrictedEndTime);
     };
     const deselectAllRestaurantsInCity = (cityName) => {
         const cityRestaurants = getRestaurantsInCity(cityName);
@@ -1539,7 +1566,7 @@ const CompleteOffersAdmin = () => {
         console.log('🏪 RestaurantIds:', formData.RestaurantIds);
 
         // Load data specifically for combo offers when restaurants are selected
-        if (formData.offerType === 8 && formData.RestaurantIds.length > 0) {
+        if (formData.offerType === 4 && formData.RestaurantIds.length > 0) {
             console.log('🍕 Loading combo data for restaurants:', formData.RestaurantIds);
 
             // Load both products and categories for combo offers since user can switch between them
@@ -1569,7 +1596,7 @@ const CompleteOffersAdmin = () => {
         return (
             <div>
                 <label className="block text-sm font-medium mb-2">Discount Type</label>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     {filteredDiscountTypes.map(type => (
                         <button
                             key={type.value}
@@ -1629,6 +1656,11 @@ const CompleteOffersAdmin = () => {
                 minItemQuantity: formData.minItemQuantity ? parseInt(formData.minItemQuantity) : null,
                 flashSaleQuantity: formData.flashSaleQuantity ? parseInt(formData.flashSaleQuantity) : null,
 
+
+                // NEW: Discount Application Flags
+                applyToOrderSubtotal: formData.applyToOrderSubtotal,
+                applyToDeliveryFee: formData.applyToDeliveryFee,
+                
                 // Include selected branches
                 RestaurantBranches: formData.RestaurantBranches.map(selectedBranch => {
                     const branchData = restaurants.find(r =>
@@ -1648,7 +1680,8 @@ const CompleteOffersAdmin = () => {
 
                 // Format targets based on offer type
                 Targets: (() => {
-                    if (formData.offerType === 8 && formData.comboItems.length > 0) {
+                    // For Combo offers, use combo items as targets
+                    if (formData.offerType === 4 && formData.comboItems.length > 0) {
                         const targetType = comboTargetType === 'Product' ? 1 : 2;
                         return formData.comboItems.map(comboItem => ({
                             targetType: targetType,
@@ -1656,32 +1689,33 @@ const CompleteOffersAdmin = () => {
                         }));
                     }
 
-                    if ([5, 6, 7, 9].includes(formData.offerType)) {
-                        const targetType = subOfferType === 'product' ? 1 : subOfferType === 'category' ? 2 : 3;
-                        return formData.Targets.map(targetId => ({
-                            targetType: targetType,
-                            targetId: targetId
-                        }));
+                    // For Product and Category offers, use selected targets
+                    if ((formData.offerType === 1 || formData.offerType === 2) && formData.Targets.length > 0) {
+                        return formData.Targets.map(targetId => {
+                            const targetType = formData.offerType === 1 ? 1 : 2; // 1=Product, 2=Category
+                            return {
+                                targetType: targetType,
+                                targetId: targetId
+                            };
+                        });
                     }
 
-                    return formData.Targets.map(targetId => {
-                        const targetType = formData.offerType === 1 ? 1 : formData.offerType === 2 ? 2 : 3;
-                        return {
-                            targetType: targetType,
-                            targetId: targetId
-                        };
-                    });
+                    // For Order and Flash offers, no specific targets needed (or handled differently)
+                    return [];
                 })(),
 
-                comboItems: formData.comboItems.map(item => ({
+                // Combo Items Configuration (only for Combo offers)
+                comboItems: formData.offerType === 4 ? formData.comboItems.map(item => ({
                     productId: item.productId,
                     RequiredQuantity: item.requiredQuantity,
                     DiscountPercent: item.discountPercent,
                     targetType: comboTargetType
-                })),
+                })) : [],
 
-                subTargetType: [5, 6, 7].includes(formData.offerType) ? subOfferType : null,
-                comboTargetType: formData.offerType === 8 ? comboTargetType : null
+                // Additional properties for backward compatibility
+                isComboOffer: formData.offerType === 4,
+
+                comboTargetType: formData.offerType === 4 ? comboTargetType : null
             };
 
             const url = editingOffer
@@ -1697,19 +1731,38 @@ const CompleteOffersAdmin = () => {
 
             if (response.ok) {
                 const result = await response.json();
+                console.log('Offer saved successfully:', result);
+
                 if (editingOffer) {
+                    // Update existing offer in the list
                     setOffers(prev => prev.map(offer =>
                         offer.offerId === editingOffer.offerId ? result : offer
                     ));
+                    console.log('Updated existing offer');
                 } else {
+                    // Add new offer to the list
                     setOffers(prev => [...prev, result]);
+                    console.log('Added new offer');
                 }
+
+                // Reset form and close modal
                 resetForm();
                 setShowCreateModal(false);
                 setEditingOffer(null);
+
+                // Show success message
+                alert(editingOffer ? 'Offer updated successfully!' : 'Offer created successfully!');
+
             } else {
-                const errorData = await response.json();
-                alert('Error saving offer: ' + (errorData.message || 'Unknown error'));
+                const errorData = await response.text();
+                console.error('Server error response:', errorData);
+
+                try {
+                    const parsedError = JSON.parse(errorData);
+                    alert('Error saving offer: ' + (parsedError.message || parsedError.title || 'Unknown error'));
+                } catch {
+                    alert('Error saving offer: ' + errorData);
+                }
             }
         } catch (error) {
             console.error('Error saving offer:', error);
@@ -1766,14 +1819,10 @@ const CompleteOffersAdmin = () => {
     const getCompatibleDiscountTypes = (offerType) => {
         const compatibility = {
             1: [1, 2, 3], // Product: Percentage, Fixed, BuyXGetY
-            2: [1, 2, 3], // Category: Percentage, Fixed, BuyXGetY
-            3: [1, 2, 4], // Order: Percentage, Fixed, FreeDelivery
-            4: [1, 2, 4], // Delivery: Percentage, Fixed, FreeDelivery
-            5: [1, 2, 4], // First Order: Percentage, Fixed, FreeDelivery
-            6: [1, 2, 3, 4], // Loyalty: All types
-            7: [1, 2, 3, 4], // Time-Based: All types
-            8: [1, 2], // Combo: Percentage, Fixed only
-            9: [1, 2] // Flash Sale: Percentage, Fixed only
+            2: [1, 2, 3], // Category: Percentage, Fixed, BuyXGetY  
+            3: [1, 2],    // Order: Percentage, Fixed (no BuyXGetY for order-level)
+            4: [1, 2],    // Combo: Percentage, Fixed (discounts applied to combo items)
+            5: [1, 2]     // Flash Sale: Percentage, Fixed
         };
         return compatibility[offerType] || [1, 2];
     };
@@ -1797,30 +1846,34 @@ const CompleteOffersAdmin = () => {
             getQuantity: () => discountType === 3 && [1, 2, 6, 7].includes(offerType),
             getDiscountPercent: () => discountType === 3 && [1, 2, 6, 7].includes(offerType),
 
+            // NEW: Always show discount application section
+            discountApplication: () => true,
+
+            // NEW: Always show constraints section
+            constraintsSection: () => true,
+            
             // Min/Max discount fields
             maxDiscountAmount: () => discountType !== 4, // Not for free delivery
             minOrderAmount: () => discountType !== 4, // Not for free delivery
 
             // Offer-specific sections
-            firstOrderSection: () => offerType === 5,
-            loyaltyTierSection: () => offerType === 6,
-            timeBasedSection: () => offerType === 7,
-            comboSection: () => offerType === 8,
-            flashSaleSection: () => offerType === 9,
+            //firstOrderSection: () => offerType === 5,
+            //loyaltyTierSection: () => offerType === 6,
+            //timeBasedSection: () => offerType === 7,
+            //comboSection: () => offerType === 8,
+            flashSaleSection: () => offerType === 5,
 
-            // Sub-targeting section
-            subTargetingSection: () => [5, 6, 7].includes(offerType),
 
             // Target selection (products/categories)
+            // Target selection (products/categories)
             targetSelection: () => {
-                if (offerType === 1) return true; // Always for products
-                if (offerType === 2) return true; // Always for categories
-                if (offerType === 8) return true; // Always for combo
-                if ([5, 6, 7, 9].includes(offerType)) {
-                    return ['product', 'category'].includes(subOfferType);
-                }
-                return false;
+                return offerType === 1 || offerType === 2 || offerType === 4; // Product or Category
             },
+
+
+            // Combo section
+            comboSection: () => offerType === 4, // Combo
+
 
             // City selector
             citySelector: () => {
@@ -1856,7 +1909,7 @@ const CompleteOffersAdmin = () => {
             isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
             endTime: null, minItemQuantity: '', isComboOffer: false, comboItems: [],
             couponCode: '', requiresCouponCode: false, flashSaleQuantity: '',
-            RestaurantIds: [], RestaurantBranches: [], Targets: []
+            RestaurantIds: [], RestaurantBranches: [], Targets: [], applyToDeliveryFee: true,applyToOrderSubtotal: false,
         });
 
         // Reset all search filters
@@ -1865,7 +1918,6 @@ const CompleteOffersAdmin = () => {
         setComboProductSearch('');
         setSelectedComboRestaurant('');
         setSelectedProductRestaurants([]); // Add this line
-        setSubOfferType('order'); // Reset sub-offer type
         setComboTargetType('Product'); // Add this line
 
         setEditingOffer(null);
@@ -1899,42 +1951,22 @@ const CompleteOffersAdmin = () => {
                 console.log('⚠️ Using fallback offer data:', offerDetail);
             }
 
-            // Determine sub-offer type for special offers
-            let initialSubOfferType = 'order'; // default
-            if ([5, 6, 7].includes(offerDetail.offerType)) {
-                if (offerDetail.subTargetType) {
-                    initialSubOfferType = offerDetail.subTargetType;
-                } else if (offerDetail.targets?.length > 0) {
-                    // Infer from existing targets
-                    const firstTargetType = offerDetail.targets[0].targetType;
-                    initialSubOfferType = firstTargetType === 1 ? 'product' :
-                        firstTargetType === 2 ? 'category' : 'order';
-                }
-            }
-
-            console.log('🎯 Determined initial sub-offer type:', initialSubOfferType);
-            setSubOfferType(initialSubOfferType);
-
-            // FIXED: Handle branches properly for editing
+            // Handle branches properly for editing
             let selectedBranches = [];
             if (offerDetail.restaurantBranches && offerDetail.restaurantBranches.length > 0) {
-                // Map branches to selectedBranches format
                 selectedBranches = offerDetail.restaurantBranches.map(rb => ({
                     restaurantId: rb.id,
                     branchId: rb.branchId
                 }));
 
-                // If branch data is incomplete (nulls), try to merge with current restaurants data
                 const completeRestaurantBranches = offerDetail.restaurantBranches.map(rb => {
                     const existingBranch = restaurants.find(r =>
                         r.id === rb.id && r.branchId === rb.branchId
                     );
 
                     if (existingBranch) {
-                        // Use existing data if available
                         return existingBranch;
                     } else {
-                        // Create minimal branch data
                         return {
                             id: rb.id,
                             branchId: rb.branchId,
@@ -1946,7 +1978,6 @@ const CompleteOffersAdmin = () => {
                     }
                 });
 
-                // Add these branches to restaurants if they don't exist
                 const newRestaurants = [...restaurants];
                 completeRestaurantBranches.forEach(branch => {
                     const exists = newRestaurants.some(r =>
@@ -1957,12 +1988,10 @@ const CompleteOffersAdmin = () => {
                     }
                 });
 
-                // Update restaurants state if we added new ones
                 if (newRestaurants.length > restaurants.length) {
                     setRestaurants(newRestaurants);
                 }
             }
-
             console.log('🌿 Converted branches:', selectedBranches);
 
 
@@ -2014,6 +2043,11 @@ const CompleteOffersAdmin = () => {
 
                 minItemQuantity: offerDetail.minItemQuantity?.toString() || '',
 
+                applyStackingLogic: offerDetail.applyStackingLogic?.toString() || '',
+                // NEW: Discount Application Flags
+                applyToOrderSubtotal: offerDetail.applyToOrderSubtotal !== undefined ? offerDetail.applyToOrderSubtotal : true,
+                applyToDeliveryFee: offerDetail.applyToDeliveryFee !== undefined ? offerDetail.applyToDeliveryFee : false,
+
                 // Combo properties
                 isComboOffer: offerDetail.isComboOffer || false,
                 comboItems: offerDetail.comboItems || [],
@@ -2031,7 +2065,7 @@ const CompleteOffersAdmin = () => {
                 Targets: offerDetail.targets?.map(t => t.targetId) || []
             };
 
-            if (offerDetail.offerType === 8) {
+            if (offerDetail.offerType === 4) {
                 // Determine combo target type from existing combo items
                 const hasProducts = offerDetail.comboItems?.some(item =>
                     products.find(p => p.id === item.productId)
@@ -2061,38 +2095,26 @@ const CompleteOffersAdmin = () => {
                 ]);
             }
 
-            // STEP 3: For product/category offers, sync restaurant selections
-            if ((formDataToSet.offerType === 1 || formDataToSet.offerType === 2) || ([5, 6, 7].includes(formDataToSet.offerType) &&
-                ['product', 'category'].includes(initialSubOfferType) &&
-                formDataToSet.RestaurantIds.length > 0)) {
-                console.log('🎯 STEP 3: Processing product/category offer');
+            // Load data for product/category offers
+            if ((formDataToSet.offerType === 1 || formDataToSet.offerType === 2) &&
+                formDataToSet.RestaurantIds.length > 0) {
 
-                // Use RestaurantIds as the source of truth for restaurant selection
                 const restaurantsToSelect = formDataToSet.RestaurantIds || [];
-                console.log('🏪 Restaurants from RestaurantIds:', restaurantsToSelect);
 
                 if (restaurantsToSelect.length > 0) {
-                    // Set restaurant selection for product filtering
                     setSelectedProductRestaurants(restaurantsToSelect);
 
-                    console.log('🔄 STEP 4: Loading products/categories for selected restaurants:', restaurantsToSelect);
-                    // Load products/categories for these restaurants
                     await Promise.all([
                         loadCategoriesForRestaurants(restaurantsToSelect),
                         loadProductsForRestaurants(restaurantsToSelect)
                     ]);
-
-                    console.log('✅ STEP 5: Data loaded for restaurants');
                 } else {
-                    // No restaurants selected, reset and show all
                     setSelectedProductRestaurants([]);
-                    console.log('ℹ️ No restaurants selected, showing all items');
                 }
             } else {
-                // For other offer types, reset restaurant selection
                 setSelectedProductRestaurants([]);
-                console.log('ℹ️ Not a product/category offer');
             }
+
 
             setShowCreateModal(true);
             console.log('🎉 EDIT PROCESS COMPLETED SUCCESSFULLY');
@@ -2104,11 +2126,17 @@ const CompleteOffersAdmin = () => {
                 ...offer,
                 RestaurantIds: offer.restaurantIds || [],
                 Targets: offer.targets?.map(t => t.targetId) || [],
-                userTiers: offer.userTiers || [],
-                dayOfWeek: offer.dayOfWeek || [],
+                // NEW: Default values for new fields
+                applyToOrderSubtotal: true,
+                applyToDeliveryFee: false,
+                restrictedToTiers: offer.userTiers || [],
+                restrictedToDaysOfWeek: offer.dayOfWeek || [],
+                restrictedStartTime: formatTimeOnlyForInput(offer.startTime),
+                restrictedEndTime: formatTimeOnlyForInput(offer.endTime),
                 comboItems: offer.comboItems || []
             });
             setShowCreateModal(true);
+        
         }
     };
 
@@ -2309,19 +2337,27 @@ const CompleteOffersAdmin = () => {
         if (offer.dayOfWeek?.length && offer.dayOfWeek.length < 7) badges.push({ text: 'TIME LIMITED', color: 'bg-green-100 text-green-800' });
         return badges;
     };
+    // Replace the existing validateForm function in CompleteOffersAdmin.tsx
+
     const validateForm = () => {
         const errors = [];
         let discountValueD = parseFloat(formData.discountValue);
         let flashSaleQuantityD = parseFloat(formData.flashSaleQuantity);
         let buyQuantityD = parseFloat(formData.buyQuantity);
         let getQuantityD = parseFloat(formData.getQuantity);
-        
+
         // Basic required fields
         if (!formData.name.trim()) errors.push('Offer name (Arabic) is required');
         if (!formData.startDate) errors.push('Start date is required');
         if (!formData.endDate) errors.push('End date is required');
-        if (!formData.discountValue || (!isNaN(discountValueD) && discountValueD <= 0)) errors.push('Discount value must be greater than 0');
+        if (!formData.discountValue || (!isNaN(discountValueD) && discountValueD <= 0))
+            errors.push('Discount value must be greater than 0');
         if (formData.RestaurantIds.length === 0) errors.push('At least one restaurant must be selected');
+
+        // NEW: Discount application validation
+        if (!formData.applyToOrderSubtotal && !formData.applyToDeliveryFee) {
+            errors.push('Offer must apply to either order subtotal or delivery fee (or both)');
+        }
 
         // Offer type specific validation
         switch (formData.offerType) {
@@ -2333,25 +2369,11 @@ const CompleteOffersAdmin = () => {
                 if (formData.Targets.length === 0) errors.push('At least one category must be selected');
                 break;
 
-            case 5: // First Order
-                if (!formData.isFirstOrderOnly) errors.push('First order flag must be enabled');
-                break;
-
-            case 6: // Loyalty Tier
-                if (formData.userTiers.length === 0) errors.push('At least one loyalty tier must be selected');
-                break;
-
-            case 7: // Time-Based
-                if (formData.dayOfWeek.length === 0) errors.push('At least one day of week must be selected');
-                if (!formData.startTime) errors.push('Start time is required');
-                if (!formData.endTime) errors.push('End time is required');
-                break;
-
-            case 8: // Combo Deal
+            case 4: // Combo Deal
                 if (formData.comboItems.length === 0) errors.push('At least one combo item must be added');
                 break;
 
-            case 9: // Flash Sale
+            case 5: // Flash Sale
                 if (!formData.flashSaleQuantity || (!isNaN(flashSaleQuantityD) && flashSaleQuantityD <= 0)) {
                     errors.push('Flash sale quantity must be greater than 0');
                 }
@@ -2375,10 +2397,33 @@ const CompleteOffersAdmin = () => {
             }
         }
 
-        // Time validation for time-based offers
-        if (formData.offerType === 7 && formData.startTime && formData.endTime) {
+        // NEW: Time constraint validation
+        if (formData.startTime && formData.endTime) {
             if (formData.startTime >= formData.endTime) {
-                errors.push('End time must be after start time');
+                errors.push('End time must be after start time for time restrictions');
+            }
+        }
+
+        // Percentage validation
+        if (formData.discountType === 1 && discountValueD > 100) {
+            errors.push('Percentage discount cannot exceed 100%');
+        }
+
+        // Loyalty tier validation
+        if (formData.userTiers.length > 0) {
+            const validTiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+            const invalidTiers = formData.userTiers.filter(tier => !validTiers.includes(tier));
+            if (invalidTiers.length > 0) {
+                errors.push(`Invalid loyalty tiers selected: ${invalidTiers.join(', ')}`);
+            }
+        }
+
+        // Day of week validation
+        if (formData.dayOfWeek.length > 0) {
+            const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const invalidDays = formData.dayOfWeek.filter(day => !validDays.includes(day));
+            if (invalidDays.length > 0) {
+                errors.push(`Invalid days selected: ${invalidDays.join(', ')}`);
             }
         }
 
@@ -2438,7 +2483,7 @@ const CompleteOffersAdmin = () => {
                                 <textarea
                                     value={formData.description}
                                     onChange={(e) => handleInputChange('description', e.target.value)}
-                                    className="w-full p-2 border rounded-md h-20"
+                                    className="w-full p-2 border rounded-md h-15"
                                 />
                             </div>
                             <div>
@@ -2446,7 +2491,7 @@ const CompleteOffersAdmin = () => {
                                 <textarea
                                     value={formData.descriptionEn}
                                     onChange={(e) => handleInputChange('descriptionEn', e.target.value)}
-                                    className="w-full p-2 border rounded-md h-20"
+                                    className="w-full p-2 border rounded-md h-15"
                                 />
                             </div>
                         </div>
@@ -2455,7 +2500,7 @@ const CompleteOffersAdmin = () => {
                     {/* Offer Type Selection - Always Show */}
                     <div>
                         <label className="block text-sm font-medium mb-2">Offer Type *</label>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
                             {offerTypes.map(type => (
                                 <button
                                     key={type.value}
@@ -2481,8 +2526,8 @@ const CompleteOffersAdmin = () => {
                     {renderDiscountTypeSelection()}
 
                     {/* Discount Configuration - Conditional */}
-                    <div className="border rounded-lg p-4 bg-gray-50">
-                        <h3 className="font-medium mb-3">Discount Configuration</h3>
+                    <div className="border rounded-lg p-4 ">
+                        <h3 className="font-medium mb-3">Discount Type Configuration</h3>
 
                         {/* BuyXGetY Configuration */}
                         {shouldShowField('buyQuantity', formData.offerType, formData.discountType) && (
@@ -2524,15 +2569,6 @@ const CompleteOffersAdmin = () => {
                             </div>
                         )}
 
-                        {/* Free Delivery Notice */}
-                        {formData.discountType === 4 && (
-                            <div className="bg-red-50 p-3 rounded-md">
-                                <p className="text-sm text-red-700">
-                                    Free delivery will be applied to delivery fee. No additional configuration needed.
-                                </p>
-                            </div>
-                        )}
-
                         {/* Standard Discount Configuration */}
                         {[1, 2].includes(formData.discountType) && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2545,8 +2581,8 @@ const CompleteOffersAdmin = () => {
                                         value={formData.discountValue}
                                         onChange={(e) => handleInputChange('discountValue', e.target.value)}
                                         className="w-full p-2 border rounded-md"
-                                        min="0"
-                                        step="0.01"
+                                        min="1"
+                                        step="1"
                                         required
                                     />
                                 </div>
@@ -2559,7 +2595,7 @@ const CompleteOffersAdmin = () => {
                                             onChange={(e) => handleInputChange('maxDiscountAmount', e.target.value)}
                                             className="w-full p-2 border rounded-md"
                                             min="0"
-                                            step="0.01"
+                                            step="1"
                                             placeholder="Optional"
                                         />
                                     </div>
@@ -2573,7 +2609,7 @@ const CompleteOffersAdmin = () => {
                                             onChange={(e) => handleInputChange('minOrderAmount', e.target.value)}
                                             className="w-full p-2 border rounded-md"
                                             min="0"
-                                            step="0.01"
+                                            step="1"
                                             placeholder="Optional"
                                         />
                                     </div>
@@ -2582,101 +2618,396 @@ const CompleteOffersAdmin = () => {
                         )}
                     </div>
 
-                    {/* Sub-targeting Section - Conditional */}
-                    {shouldShowField('subTargetingSection', formData.offerType, formData.discountType) &&
-                        renderSubTargetingSection()
+                    {/* NEW: Discount Application Section */}
+                    {shouldShowField('discountApplication', formData.offerType, formData.discountType) &&
+
+                        <div className="border rounded-lg p-4 bg-blue-50">
+                            <h3 className="font-medium mb-3 flex items-center gap-2">
+                                <Settings className="w-5 h-5 text-blue-600" />
+                                Apply Discount To
+                            </h3>
+                            <p className="text-sm text-blue-600 mb-3">
+                                Choose where this discount should be applied. You can apply to both if needed.
+                            </p>
+
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.applyToOrderSubtotal}
+                                        onChange={(e) => handleInputChange('applyToOrderSubtotal', e.target.checked)}
+                                        className="rounded"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4 text-blue-600" />
+                                        <span className="text-sm font-medium">Order Subtotal</span>
+                                    </div>
+                                    <span className="text-xs text-gray-500">(Apply to products/categories in the order)</span>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.applyToDeliveryFee}
+                                        onChange={(e) => handleInputChange('applyToDeliveryFee', e.target.checked)}
+                                        className="rounded"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 text-blue-600" />
+                                        <span className="text-sm font-medium">Delivery Fee</span>
+                                    </div>
+                                    <span className="text-xs text-gray-500">(Also apply discount to delivery charges)</span>
+                                </div>
+                            </div>
+
+                            {/* Warning if neither is selected */}
+                            {!formData.applyToOrderSubtotal && !formData.applyToDeliveryFee && (
+                                <div className="mt-3 p-2 bg-red-100 border border-red-300 rounded text-sm text-red-700">
+                                    ⚠️ You must select at least one application target for the discount to work.
+                                </div>
+                            )}
+
+                            {/* Info about delivery application */}
+                            {formData.applyToDeliveryFee && (
+                                <div className="mt-3 p-2 bg-green-100 border border-green-300 rounded text-xs text-green-700">
+                                    💡 This offer will apply to delivery fees in addition to any order discounts.
+                                </div>
+                            )}
+                        </div>
                     }
 
-                    {/* Offer-specific sections - Conditional */}
-                    {shouldShowField('firstOrderSection', formData.offerType, formData.discountType) && (
-                        <div className="border rounded-lg p-4 bg-red-50">
-                            <h3 className="font-medium mb-3 flex items-center gap-2">
-                                <Users className="w-5 h-5 text-red-600" />
-                                First Order Configuration
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={formData.isFirstOrderOnly}
-                                    onChange={(e) => handleInputChange('isFirstOrderOnly', e.target.checked)}
-                                    className="rounded"
-                                />
-                                <label className="text-sm font-medium">Only for first-time customers *</label>
-                            </div>
-                            <p className="text-sm text-red-600 mt-2">
-                                This offer will only be available to customers placing their first order.
-                            </p>
-                        </div>
-                    )}
 
-                    {shouldShowField('loyaltyTierSection', formData.offerType, formData.discountType) && (
-                        <div className="border rounded-lg p-4 bg-yellow-50">
-                            <h3 className="font-medium mb-3 flex items-center gap-2">
-                                <Award className="w-5 h-5 text-yellow-600" />
-                                Loyalty Tier Selection *
+                    {/* Advanced Settings */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-5">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                            Advanced Settings
+                        </h3>
+
+                        {/* Primary Settings Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Priority
+                                </label>
+                                <select
+                                    value={formData.priority}
+                                    onChange={(e) => handleInputChange('priority', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                >
+                                    {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                                        <option key={num} value={num}>
+                                            {num} {num === 10 ? '(Highest)' : num === 1 ? '(Lowest)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Max Uses per User
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.maxUsagePerUser}
+                                    onChange={(e) => handleInputChange('maxUsagePerUser', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="Unlimited"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Max Total Uses
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.maxUsageTotal}
+                                    onChange={(e) => handleInputChange('maxUsageTotal', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="Unlimited"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Min Item Quantity
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.minItemQuantity}
+                                    onChange={(e) => handleInputChange('minItemQuantity', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="No minimum"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Date and Options Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Start Date <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    value={formData.startDate}
+                                    onChange={(e) => handleInputChange('startDate', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    End Date <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    value={formData.endDate}
+                                    onChange={(e) => handleInputChange('endDate', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Wheels Contribution
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.wheelsContribution}
+                                    onChange={(e) => handleInputChange('wheelsContribution', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    required
+                                    min="0"
+                                    step="0.01"
+                                />
+                            </div>
+
+                            <div className="flex items-center">
+                                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
+                                    <input
+                                        id="isStackable"
+                                        type="checkbox"
+                                        checked={formData.isStackable}
+                                        onChange={(e) => handleInputChange('isStackable', e.target.checked)}
+                                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Allow Stacking</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Coupon Code Configuration */}
+                    {shouldShowField('couponCode', formData.offerType, formData.discountType) && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                                Coupon Code
                             </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {userTiers.map(tier => (
-                                    <label key={tier} className="flex items-center gap-2">
+
+                            <div className="space-y-4">
+                                <div className="flex items-center">
+                                    <label className="flex items-center gap-3 p-3 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors cursor-pointer border border-purple-200">
                                         <input
                                             type="checkbox"
-                                            checked={formData.userTiers.includes(tier)}
-                                            onChange={() => handleMultiSelect('userTiers', tier)}
-                                            className="rounded"
+                                            checked={formData.requiresCouponCode}
+                                            onChange={(e) => handleInputChange('requiresCouponCode', e.target.checked)}
+                                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                                         />
-                                        <span className="text-sm">{tier}</span>
+                                        <span className="text-sm font-medium text-gray-700">Require coupon code</span>
                                     </label>
-                                ))}
+                                </div>
+
+                                {formData.requiresCouponCode && (
+                                    <div className="max-w-sm">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Coupon Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.couponCode}
+                                            onChange={(e) => handleInputChange('couponCode', e.target.value.toUpperCase())}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors font-mono text-base uppercase"
+                                            placeholder="e.g., SAVE20"
+                                        />
+                                        <p className="mt-1 text-xs text-gray-500">
+                                            Code will be automatically converted to uppercase
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {shouldShowField('timeBasedSection', formData.offerType, formData.discountType) && (
-                        <div className="border rounded-lg p-4 bg-green-50">
-                            <h3 className="font-medium mb-3 flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-green-600" />
-                                Time-Based Conditions *
+                    {/* Constraints Section */}
+                    {shouldShowField('constraintsSection', formData.offerType, formData.discountType) && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2 pb-2 border-b border-gray-100">
+                                Additional Constraints
                             </h3>
+                            <p className="text-sm text-gray-600 mb-5">
+                                Optional restrictions to control when and who can use this offer
+                            </p>
 
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium mb-2">Days of Week *</label>
-                                <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
-                                    {daysOfWeek.map(day => (
-                                        <label key={day} className="flex items-center gap-1 text-sm">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* User Constraints */}
+                                <div className="space-y-4">
+                                    <h4 className="font-medium text-gray-800 flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                        Customer Requirements
+                                    </h4>
+
+                                    {/* First Order Only */}
+                                    <div className="pl-4 border-l-2 border-green-100">
+                                        <label className="flex items-start gap-3 p-3 bg-green-50 rounded-md hover:bg-green-100 transition-colors cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                checked={formData.dayOfWeek.includes(day)}
-                                                onChange={() => handleMultiSelect('dayOfWeek', day)}
-                                                className="rounded"
+                                                checked={formData.isFirstOrderOnly}
+                                                onChange={(e) => handleInputChange('isFirstOrderOnly', e.target.checked)}
+                                                className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 mt-0.5"
                                             />
-                                            {day.substring(0, 3)}
+                                            <div>
+                                                <span className="text-sm font-medium text-gray-700">First-time customers only</span>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Restrict to customers placing their very first order
+                                                </p>
+                                            </div>
                                         </label>
-                                    ))}
+                                    </div>
+
+                                    {/* Loyalty Tiers */}
+                                    <div className="pl-4 border-l-2 border-green-100">
+                                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                                            Loyalty Tier Restrictions
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {userTiers.map(tier => (
+                                                <label key={tier} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm hover:bg-gray-100 transition-colors cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.userTiers.includes(tier)}
+                                                        onChange={() => handleMultiSelect('userTiers', tier)}
+                                                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                    />
+                                                    <span className="text-gray-700">{tier}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        {formData.userTiers.length > 0 && (
+                                            <div className="mt-2 p-2 bg-green-100 rounded text-xs text-green-700">
+                                                Available to: {formData.userTiers.join(', ')} members
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Time Constraints */}
+                                <div className="space-y-4">
+                                    <h4 className="font-medium text-gray-800 flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                        Time Restrictions
+                                    </h4>
+
+                                    {/* Days of Week */}
+                                    <div className="pl-4 border-l-2 border-blue-100">
+                                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                                            Specific Days Only
+                                        </label>
+                                        <div className="grid grid-cols-4 gap-1">
+                                            {daysOfWeek.map(day => (
+                                                <label key={day} className="flex items-center gap-1 p-2 bg-gray-50 rounded text-xs hover:bg-gray-100 transition-colors cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.dayOfWeek.includes(day)}
+                                                        onChange={() => handleMultiSelect('dayOfWeek', day)}
+                                                        className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                    />
+                                                    <span className="text-gray-700 font-medium">{day.substring(0, 3)}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        {formData.dayOfWeek.length > 0 && (
+                                            <div className="mt-2 p-2 bg-blue-100 rounded text-xs text-blue-700">
+                                                Active on: {formData.dayOfWeek.join(', ')}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Time Range */}
+                                    <div className="pl-4 border-l-2 border-blue-100">
+                                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                                            Time Window
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-600 mb-1">Start Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={formData.startTime || ''}
+                                                    onChange={(e) => handleInputChange('startTime', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-600 mb-1">End Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={formData.endTime || ''}
+                                                    onChange={(e) => handleInputChange('endTime', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+                                        {formData.startTime && formData.endTime && (
+                                            <div className="mt-2 p-2 bg-blue-100 rounded text-xs text-blue-700">
+                                                Active: {formData.startTime} - {formData.endTime}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Start Time *</label>
-                                    <input
-                                        type="time"
-                                        value={formData.startTime}
-                                        onChange={(e) => handleInputChange('startTime', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        required
-                                    />
+                            {/* Constraints Summary */}
+                            {(formData.isFirstOrderOnly || formData.userTiers.length > 0 ||
+                                formData.dayOfWeek.length > 0 ||
+                                (formData.startTime && formData.endTime)) && (
+                                <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <h5 className="text-sm font-semibold text-amber-800 mb-2">
+                                        Active Constraints:
+                                    </h5>
+                                    <div className="text-sm text-amber-700 space-y-1">
+                                        {formData.isFirstOrderOnly && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div>
+                                                First-time customers only
+                                            </div>
+                                        )}
+                                        {formData.userTiers.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div>
+                                                Loyalty tiers: {formData.userTiers.join(', ')}
+                                            </div>
+                                        )}
+                                        {formData.dayOfWeek.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div>
+                                                Days: {formData.dayOfWeek.join(', ')}
+                                            </div>
+                                        )}
+                                        {formData.startTime && formData.endTime && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div>
+                                                Time: {formData.startTime} - {formData.endTime}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">End Time *</label>
-                                    <input
-                                        type="time"
-                                        value={formData.endTime}
-                                        onChange={(e) => handleInputChange('endTime', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        required
-                                    />
-                                </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
@@ -2772,133 +3103,7 @@ const CompleteOffersAdmin = () => {
                             </div>
                         </div>
                     )}
-
-                    {/* Coupon Code Configuration - Always Show */}
-                    {shouldShowField('couponCode', formData.offerType, formData.discountType) && (
-                        <div className="border rounded-lg p-4 bg-purple-50">
-                            <h3 className="font-medium mb-3">Coupon Code (Optional)</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.requiresCouponCode}
-                                        onChange={(e) => handleInputChange('requiresCouponCode', e.target.checked)}
-                                        className="rounded"
-                                    />
-                                    <label className="text-sm font-medium">Require coupon code</label>
-                                </div>
-
-                                {formData.requiresCouponCode && (
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Coupon Code</label>
-                                        <input
-                                            type="text"
-                                            value={formData.couponCode}
-                                            onChange={(e) => handleInputChange('couponCode', e.target.value.toUpperCase())}
-                                            className="w-full p-2 border rounded-md"
-                                            placeholder="e.g., SAVE20"
-                                            style={{ textTransform: 'uppercase' }}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Advanced Settings - Always Show */}
-                    <div className="border rounded-lg p-4 bg-gray-50">
-                        <h3 className="font-medium mb-3">Advanced Settings</h3>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Priority (1-10)</label>
-                                <input
-                                    type="number"
-                                    value={formData.priority}
-                                    onChange={(e) => handleInputChange('priority', Number(e.target.value))}
-                                    className="w-full p-2 border rounded-md"
-                                    min="1"
-                                    max="10"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2 mt-6 md:mt-0">
-                                <input
-                                    id="isStackable"
-                                    type="checkbox"
-                                    checked={formData.isStackable}
-                                    onChange={(e) => handleInputChange('isStackable', e.target.checked)}
-                                    className="rounded"
-                                />
-                                <label htmlFor="isStackable" className="text-sm font-medium">Allow stacking with other offers</label>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Min Item Quantity</label>
-                                <input
-                                    type="number"
-                                    value={formData.minItemQuantity}
-                                    onChange={(e) => handleInputChange('minItemQuantity', e.target.value)}
-                                    className="w-full p-2 border rounded-md"
-                                    min="0"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Max Usage / User</label>
-                                <input
-                                    type="number"
-                                    value={formData.maxUsagePerUser}
-                                    onChange={(e) => handleInputChange('maxUsagePerUser', e.target.value)}
-                                    className="w-full p-2 border rounded-md"
-                                    min="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Max Usage Total</label>
-                                <input
-                                    type="number"
-                                    value={formData.maxUsageTotal}
-                                    onChange={(e) => handleInputChange('maxUsageTotal', e.target.value)}
-                                    className="w-full p-2 border rounded-md"
-                                    min="0"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Start Date *</label>
-                                    <input
-                                        type="date"
-                                        value={formData.startDate}
-                                        onChange={(e) => handleInputChange('startDate', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">End Date *</label>
-                                    <input
-                                        type="date"
-                                        value={formData.endDate}
-                                        onChange={(e) => handleInputChange('endDate', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Wheels Contribution</label>
-                                    <input
-                                        type="number"
-                                        value={formData.wheelsContribution}
-                                        onChange={(e) => handleInputChange('wheelsContribution', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        required
-                                        min="0"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    
 
                     {/* Restaurant Selection - Always Show */}
                     {shouldShowField('restaurantSelection', formData.offerType, formData.discountType) &&
@@ -2915,6 +3120,8 @@ const CompleteOffersAdmin = () => {
                         renderTargetSelection()
                     }
 
+                    
+                    
                     <div className="flex justify-end gap-3 pt-2">
                         <button
                             type="button"
@@ -3029,7 +3236,8 @@ const CompleteOffersAdmin = () => {
         return cities;
     };
     const OfferCard = ({ offer }) => {
-        
+        //const cities = getCitiesFromOffer(offer);
+        const constraints = getConstraintDescriptions(offer);
         const result = getOfferCityCoverage(offer, restaurants);
         if (result.hasAnyFullCity) {
             console.log('Offer fully covers at least one city:', result.citiesFullyCovered);
@@ -3079,6 +3287,23 @@ const CompleteOffersAdmin = () => {
                         </div>
                     </div>
 
+                    {/* NEW: Discount Application Display */}
+                    {(offer.applyToOrderSubtotal || offer.applyToDeliveryFee) && (
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-medium text-gray-600">Applies to:</span>
+                            {offer.applyToOrderSubtotal && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                Order Items
+                            </span>
+                            )}
+                            {offer.applyToDeliveryFee && (
+                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                Delivery Fee
+                            </span>
+                            )}
+                        </div>
+                    )}
+                    
                     {/* City Indicator */}
                     {isOrderLevel && cities.length > 0 && (
                         <div className="flex items-center gap-2 mb-3">
@@ -3089,6 +3314,20 @@ const CompleteOffersAdmin = () => {
                         </div>
                     )}
 
+                    {/* Constraints Display */}
+                    {constraints.length > 0 && (
+                        <div className="mb-3">
+                            <div className="text-xs font-medium text-gray-600 mb-1">Constraints:</div>
+                            <div className="space-y-1">
+                                {constraints.map((constraint, i) => (
+                                    <div key={i} className="text-xs text-orange-700 bg-orange-50 px-2 py-1 rounded">
+                                        {constraint}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
                     {/* Badges */}
                     <div className="flex flex-wrap gap-2">
                         {getOfferBadges(offer).map((badge, i) => (
@@ -3096,11 +3335,6 @@ const CompleteOffersAdmin = () => {
                             {badge.text}
                         </span>
                         ))}
-                        {isOrderLevel && cities.length > 0 && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            CITY-WIDE
-                        </span>
-                        )}
                     </div>
                 </div>
 
@@ -3255,7 +3489,7 @@ const CompleteOffersAdmin = () => {
 
     // Modified combo section to work with restaurant-specific products
     const renderComboSection = () => {
-        if (formData.offerType !== 8) return null;
+        if (formData.offerType !== 4) return null;
 
         return (
             <div className="border rounded-lg p-4 bg-orange-50">
