@@ -4,6 +4,7 @@ import { Play, Minus, RefreshCw } from 'lucide-react';
 import {Layers, CheckCircle, XCircle } from 'lucide-react';
 import { BarChart } from 'lucide-react';
 import { Settings } from 'lucide-react';
+import OffersAnalyticsDashboard from './OffersAnalyticsDashboard'; // Adjust path as needed
 
 const CompleteOffersAdmin = () => {
 
@@ -26,8 +27,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    const API_BASE_URL = 'http://localhost:5159';
+    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    //const API_BASE_URL = 'http://localhost:5159';
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -88,7 +89,7 @@ const CompleteOffersAdmin = () => {
         { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories', enabled: true },
         { value: 3, label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order', enabled: true },
         { value: 4, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers', enabled: true },
-        { value: 5, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers', enabled: true }
+        //{ value: 5, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers', enabled: true }
         // REMOVED: Delivery, FirstOrder, LoyaltyTier, TimeSlot - these become constraint flags
     ];
 
@@ -371,12 +372,6 @@ const CompleteOffersAdmin = () => {
         return offer.offerType === 3 || offer.applyToDeliveryFee;
     };
 
-    const hasConstraints = (offer) => {
-        return offer.isFirstOrderOnly ||
-            (offer.restrictedToTiers && offer.restrictedToTiers.length > 0) ||
-            (offer.restrictedToDaysOfWeek && offer.restrictedToDaysOfWeek.length > 0) ||
-            (offer.restrictedStartTime && offer.restrictedEndTime);
-    };
     const deselectAllRestaurantsInCity = (cityName) => {
         const cityRestaurants = getRestaurantsInCity(cityName);
 
@@ -1773,48 +1768,6 @@ const CompleteOffersAdmin = () => {
     };
 
 
-    const getFormCompletionStatus = () => {
-        const errors = validateForm();
-        const totalRequiredFields = [
-            'name', 'offerType', 'discountType', 'discountValue',
-            'startDate', 'endDate', 'restaurantSelection'
-        ].length;
-
-        // Add conditional required fields
-        let conditionalRequired = 0;
-        let conditionalCompleted = 0;
-
-        if (formData.offerType === 1 && formData.Targets.length > 0) conditionalCompleted++;
-        if (formData.offerType === 1) conditionalRequired++;
-
-        if (formData.offerType === 2 && formData.Targets.length > 0) conditionalCompleted++;
-        if (formData.offerType === 2) conditionalRequired++;
-
-        if (formData.offerType === 5 && formData.isFirstOrderOnly) conditionalCompleted++;
-        if (formData.offerType === 5) conditionalRequired++;
-
-        if (formData.offerType === 6 && formData.userTiers.length > 0) conditionalCompleted++;
-        if (formData.offerType === 6) conditionalRequired++;
-
-        if (formData.offerType === 7 && formData.dayOfWeek.length > 0 && formData.startTime && formData.endTime) conditionalCompleted++;
-        if (formData.offerType === 7) conditionalRequired++;
-
-        if (formData.offerType === 8 && formData.comboItems.length > 0) conditionalCompleted++;
-        if (formData.offerType === 8) conditionalRequired++;
-
-        if (formData.offerType === 9 && formData.flashSaleQuantity) conditionalCompleted++;
-        if (formData.offerType === 9) conditionalRequired++;
-
-        const totalRequired = totalRequiredFields + conditionalRequired;
-        const completed = totalRequired - errors.length;
-
-        return {
-            completed,
-            total: totalRequired,
-            percentage: Math.round((completed / totalRequired) * 100),
-            isValid: errors.length === 0
-        };
-    };
 
     const getCompatibleDiscountTypes = (offerType) => {
         const compatibility = {
@@ -3407,85 +3360,6 @@ const CompleteOffersAdmin = () => {
         );
     };
     
-    const renderSubTargetingSection = () => {
-        if (![5, 6, 7].includes(formData.offerType)) return null;
-
-        const offerTypeNames = {
-            5: 'First Order',
-            6: 'Loyalty Tier',
-            7: 'Time-Based'
-        };
-
-        return (
-            <div className="border rounded-lg p-4 bg-red-50">
-                <h3 className="font-medium mb-3">
-                    {offerTypeNames[formData.offerType]} Target Level
-                </h3>
-                <p className="text-sm text-red-600 mb-3">
-                    Choose whether this {offerTypeNames[formData.offerType].toLowerCase()} offer applies to specific products, categories, or the entire order.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <button
-                        type="button"
-                        onClick={() => handleSubOfferTypeChange('product')} // Use the new handler
-                        className={`p-3 border rounded-md text-left ${
-                            subOfferType === 'product'
-                                ? 'border-red-500 bg-red-100 text-red-700'
-                                : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2 mb-1">
-                            <Tag className="w-4 h-4" />
-                            <span className="font-medium">Specific Products</span>
-                        </div>
-                        <p className="text-xs text-gray-600">Apply to selected products only</p>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => handleSubOfferTypeChange('category')} // Use the new handler
-                        className={`p-3 border rounded-md text-left ${
-                            subOfferType === 'category'
-                                ? 'border-red-500 bg-red-100 text-red-700'
-                                : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2 mb-1">
-                            <Target className="w-4 h-4" />
-                            <span className="font-medium">Product Categories</span>
-                        </div>
-                        <p className="text-xs text-gray-600">Apply to selected categories</p>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => handleSubOfferTypeChange('order')} // Use the new handler
-                        className={`p-3 border rounded-md text-left ${
-                            subOfferType === 'order'
-                                ? 'border-red-500 bg-red-100 text-red-700'
-                                : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2 mb-1">
-                            <DollarSign className="w-4 h-4" />
-                            <span className="font-medium">Entire Order</span>
-                        </div>
-                        <p className="text-xs text-gray-600">Apply to total order amount</p>
-                    </button>
-                </div>
-
-                {/* Debug info - remove in production */}
-                <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                    <strong>Debug:</strong> SubType: {subOfferType},
-                    Restaurants: {formData.RestaurantIds.length},
-                    Products: {products.length},
-                    Categories: {categories.length}
-                </div>
-            </div>
-        );
-    };
-
 
     // Modified combo section to work with restaurant-specific products
     const renderComboSection = () => {
@@ -4652,42 +4526,7 @@ const CompleteOffersAdmin = () => {
                 {/* Analytics Tab Content */}
                 {activeTab === 'analytics' && (
                     <div className="w-full">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 min-h-[500px]">
-                            <div className="text-center py-16">
-                                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <BarChart className="w-10 h-10 text-gray-400" />
-                                </div>
-                                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Analytics Dashboard</h3>
-                                <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                                    Comprehensive analytics and reporting for your offers performance, customer engagement, and revenue impact.
-                                </p>
-
-                                {/* Analytics Preview Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                                    <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl border border-red-200">
-                                        <div className="text-3xl font-bold text-red-600 mb-2">42</div>
-                                        <div className="text-sm text-red-800 font-medium">Total Offers</div>
-                                        <div className="text-xs text-red-600 mt-1">+12% this month</div>
-                                    </div>
-                                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200">
-                                        <div className="text-3xl font-bold text-green-600 mb-2">₪15,430</div>
-                                        <div className="text-sm text-green-800 font-medium">Total Savings</div>
-                                        <div className="text-xs text-green-600 mt-1">+28% this month</div>
-                                    </div>
-                                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200">
-                                        <div className="text-3xl font-bold text-blue-600 mb-2">1,247</div>
-                                        <div className="text-sm text-blue-800 font-medium">Customer Usage</div>
-                                        <div className="text-xs text-blue-600 mt-1">+18% this month</div>
-                                    </div>
-                                </div>
-
-                                <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg inline-block">
-                                    <p className="text-sm text-yellow-800">
-                                        <strong>Coming Soon:</strong> Advanced analytics dashboard with detailed insights, charts, and reporting features.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                        <OffersAnalyticsDashboard API_BASE_URL={API_BASE_URL} />
                     </div>
                 )}
             </div>
