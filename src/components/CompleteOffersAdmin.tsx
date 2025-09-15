@@ -46,7 +46,7 @@ const CompleteOffersAdmin = () => {
         maxDiscountAmount: '',
         minOrderAmount: '',
         priority: 1,
-        isStackable: false,
+        isStackable: true,
         maxUsagePerUser: '',
         wheelsContribution: 0 ,
         maxUsageTotal: '',
@@ -88,7 +88,7 @@ const CompleteOffersAdmin = () => {
         { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products', enabled: true },
         { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories', enabled: true },
         { value: 3, label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order', enabled: true },
-        { value: 4, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers', enabled: true },
+        //{ value: 4, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers', enabled: true },
         //{ value: 5, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers', enabled: true }
         // REMOVED: Delivery, FirstOrder, LoyaltyTier, TimeSlot - these become constraint flags
     ];
@@ -1771,11 +1771,11 @@ const CompleteOffersAdmin = () => {
 
     const getCompatibleDiscountTypes = (offerType) => {
         const compatibility = {
-            1: [1, 2, 3], // Product: Percentage, Fixed, BuyXGetY
-            2: [1, 2, 3], // Category: Percentage, Fixed, BuyXGetY  
+            1: [1, 2], // Product: Percentage, Fixed, BuyXGetY
+            2: [1, 2], // Category: Percentage, Fixed, BuyXGetY  
             3: [1, 2],    // Order: Percentage, Fixed (no BuyXGetY for order-level)
-            4: [1, 2],    // Combo: Percentage, Fixed (discounts applied to combo items)
-            5: [1, 2]     // Flash Sale: Percentage, Fixed
+            //4: [1, 2],    // Combo: Percentage, Fixed (discounts applied to combo items)
+            //5: [1, 2]     // Flash Sale: Percentage, Fixed
         };
         return compatibility[offerType] || [1, 2];
     };
@@ -1806,8 +1806,8 @@ const CompleteOffersAdmin = () => {
             constraintsSection: () => true,
             
             // Min/Max discount fields
-            maxDiscountAmount: () => discountType !== 4, // Not for free delivery
-            minOrderAmount: () => discountType !== 4, // Not for free delivery
+            maxDiscountAmount: () => discountType == 1, // Not for free delivery
+            minOrderAmount: () => offerType == 3, // Not for free delivery
 
             // Offer-specific sections
             //firstOrderSection: () => offerType === 5,
@@ -1838,12 +1838,12 @@ const CompleteOffersAdmin = () => {
             },
 
             // Advanced settings (always show but some fields conditional)
-            priority: () => true,
-            isStackable: () => true,
+            priority: () => false,
+            isStackable: () => false,
             maxUsagePerUser: () => true,
             wheelsContribution: () => true,
             maxUsageTotal: () => true,
-            minItemQuantity: () => true,
+            minItemQuantity: () => false,
 
             // Coupon code (always show)
             couponCode: () => true
@@ -1856,7 +1856,7 @@ const CompleteOffersAdmin = () => {
         setFormData({
             name: '', nameEn: '', description: '', descriptionEn: '',
             offerType: 1, discountType: 1, discountValue: '',
-            maxDiscountAmount: '', minOrderAmount: '', priority: 1, isStackable: false,
+            maxDiscountAmount: '', minOrderAmount: '', priority: 1, isStackable: true,
             maxUsagePerUser: '', wheelsContribution:0, maxUsageTotal: '', startDate: '', endDate: '',
             isActive: true, buyQuantity: '', getQuantity: '', getDiscountPercent: 100,
             isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
@@ -1968,7 +1968,7 @@ const CompleteOffersAdmin = () => {
                 maxDiscountAmount: offerDetail.maxDiscountAmount?.toString() || '',
                 minOrderAmount: offerDetail.minOrderAmount?.toString() || '',
                 priority: offerDetail.priority || 1,
-                isStackable: offerDetail.isStackable || false,
+                isStackable: offerDetail.isStackable || true,
 
                 // Usage Limits
                 maxUsagePerUser: offerDetail.maxUsagePerUser?.toString() || '',
@@ -2453,7 +2453,7 @@ const CompleteOffersAdmin = () => {
                     {/* Offer Type Selection - Always Show */}
                     <div>
                         <label className="block text-sm font-medium mb-2">Offer Type *</label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-3">
                             {offerTypes.map(type => (
                                 <button
                                     key={type.value}
@@ -2593,9 +2593,11 @@ const CompleteOffersAdmin = () => {
                                     />
                                     <div className="flex items-center gap-2">
                                         <DollarSign className="w-4 h-4 text-blue-600" />
-                                        <span className="text-sm font-medium">Order Subtotal</span>
+                                        <span className="text-sm font-medium">    {([1, 2].includes(formData.offerType)) ? 'Selected Items Total' : 'Order Subtotal'}</span>
                                     </div>
-                                    <span className="text-xs text-gray-500">(Apply to products/categories in the order)</span>
+                                    <span className="text-xs text-gray-500">{([1, 2].includes(formData.offerType))
+                                        ? '(Apply to selected products/categories only)'
+                                        : '(Apply to all products/categories in the order)'}</span>
                                 </div>
 
                                 <div className="flex items-center gap-3">
@@ -2633,73 +2635,10 @@ const CompleteOffersAdmin = () => {
                     {/* Advanced Settings */}
                     <div className="bg-white border border-gray-200 rounded-lg p-5">
                         <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
-                            Advanced Settings
+                            Core Settings
                         </h3>
-
-                        {/* Primary Settings Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Priority
-                                </label>
-                                <select
-                                    value={formData.priority}
-                                    onChange={(e) => handleInputChange('priority', Number(e.target.value))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                >
-                                    {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                                        <option key={num} value={num}>
-                                            {num} {num === 10 ? '(Highest)' : num === 1 ? '(Lowest)' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Max Uses per User
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.maxUsagePerUser}
-                                    onChange={(e) => handleInputChange('maxUsagePerUser', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                    min="0"
-                                    placeholder="Unlimited"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Max Total Uses
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.maxUsageTotal}
-                                    onChange={(e) => handleInputChange('maxUsageTotal', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                    min="0"
-                                    placeholder="Unlimited"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Min Item Quantity
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.minItemQuantity}
-                                    onChange={(e) => handleInputChange('minItemQuantity', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                    min="0"
-                                    placeholder="No minimum"
-                                />
-                            </div>
-                        </div>
-
                         {/* Date and Options Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Start Date <span className="text-red-500">*</span>
@@ -2741,19 +2680,95 @@ const CompleteOffersAdmin = () => {
                                 />
                             </div>
 
-                            <div className="flex items-center">
-                                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
-                                    <input
-                                        id="isStackable"
-                                        type="checkbox"
-                                        checked={formData.isStackable}
-                                        onChange={(e) => handleInputChange('isStackable', e.target.checked)}
-                                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Allow Stacking</span>
-                                </label>
-                            </div>
+                            {shouldShowField('isStackable', formData.offerType, formData.discountType) && (
+
+                                <div className="flex items-center">
+                                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
+                                        <input
+                                            id="isStackable"
+                                            type="checkbox"
+                                            checked={formData.isStackable}
+                                            onChange={(e) => handleInputChange('isStackable', e.target.checked)}
+                                            className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">Allow Stacking</span>
+                                    </label>
+                                </div>
+                            )}
+
+
                         </div>
+                        {/* Primary Settings Row */}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4  items-end">
+                            {shouldShowField('priority', formData.offerType, formData.discountType) && (
+
+                                <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Priority
+                                </label>
+                                <select
+                                    value={formData.priority}
+                                    onChange={(e) => handleInputChange('priority', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                >
+                                    {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                                        <option key={num} value={num}>
+                                            {num} {num === 10 ? '(Highest)' : num === 1 ? '(Lowest)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Max Uses per User
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.maxUsagePerUser}
+                                    onChange={(e) => handleInputChange('maxUsagePerUser', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="Unlimited"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Max Total Uses
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.maxUsageTotal}
+                                    onChange={(e) => handleInputChange('maxUsageTotal', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="Unlimited"
+                                />
+                            </div>
+
+                            {shouldShowField('isStackable', formData.offerType, formData.discountType) && (
+
+                                <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Min Item Quantity
+                                </label>
+                                <input
+                                    type="number"
+                                    value={formData.minItemQuantity}
+                                    onChange={(e) => handleInputChange('minItemQuantity', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                    min="0"
+                                    placeholder="No minimum"
+                                />
+                            </div>
+
+                                )}
+                        </div>
+
+                        
                     </div>
 
                     {/* Coupon Code Configuration */}
