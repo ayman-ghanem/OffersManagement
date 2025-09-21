@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState,useRef,useCallback, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Target, Percent, DollarSign, Gift, Users, MapPin, Tag, Clock, X, Zap, Award, Package, Check } from 'lucide-react';
 import { Play, Minus, RefreshCw } from 'lucide-react';
 import {Layers, CheckCircle, XCircle } from 'lucide-react';
@@ -84,6 +84,76 @@ const CompleteOffersAdmin = () => {
         Targets: []
     });
 
+    const [dataLoading, setDataLoading] = useState({
+        restaurants: false,
+        categories: false,
+        products: false,
+        offers: false
+    });
+
+    const [dataLoaded, setDataLoaded] = useState({
+        restaurants: false,
+        categories: false,
+        products: false,
+        offers: false
+    });
+
+    const loadingRef = useRef({
+        restaurants: false,
+        categories: new Set(), // Track which restaurants are being loaded
+        products: new Set()
+    });
+
+    const [restaurantDataCache, setRestaurantDataCache] = useState({
+        categories: new Map(), // restaurantId -> categories[]
+        products: new Map()    // restaurantId -> products[]
+    });
+    
+    // Load initial data only once
+    useEffect(() => {
+        const loadInitialData = async () => {
+            await Promise.all([
+                loadRestaurants(),
+                loadOffers()
+            ]);
+        };
+        loadInitialData();
+    }, []); // Only run once on mount
+
+// Load categories/products only when restaurants change and offer needs them
+    useEffect(() => {
+        if (!dataLoaded.restaurants || formData.RestaurantIds.length === 0) return;
+
+        const needsProductCategoryData = [1, 2, 4].includes(formData.offerType) ||
+            ([5, 6, 7, 9].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
+
+        if (needsProductCategoryData) {
+            loadCategoriesForRestaurants(formData.RestaurantIds);
+            loadProductsForRestaurants(formData.RestaurantIds);
+        }
+    }, [formData.RestaurantIds, formData.offerType, dataLoaded.restaurants]);
+
+// Remove the other useEffects that load data unnecessarily
+    const loadRestaurants = async () => {
+        if (loadingRef.current.restaurants || dataLoaded.restaurants) return;
+
+        loadingRef.current.restaurants = true;
+        setDataLoading(prev => ({ ...prev, restaurants: true }));
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/restaurants`);
+            const data = await response.json();
+            setRestaurants(data);
+            setDataLoaded(prev => ({ ...prev, restaurants: true }));
+        } catch (error) {
+            console.error('Error loading restaurants:', error);
+        } finally {
+            loadingRef.current.restaurants = false;
+            setDataLoading(prev => ({ ...prev, restaurants: false }));
+        }
+    };
+
+    
     const offerTypes = [
         { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products', enabled: true },
         { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories', enabled: true },
@@ -175,7 +245,6 @@ const CompleteOffersAdmin = () => {
     const [showCityOnlyOffers, setShowCityOnlyOffers] = useState(false);
 
     const loadItemsForRestaurant = async (restaurantId) => {
-        console.log('🔄 Loading products for restaurant:', restaurantId);
 
         if (!restaurantId) {
             setAvailableItems([]);
@@ -192,7 +261,6 @@ const CompleteOffersAdmin = () => {
                     .filter(p => p.restaurantId === restaurantId)
                     .map(p => ({ ...p, type: 'product' }));
 
-                console.log('✅ Found products:', restaurantProducts.length);
                 setAvailableItems(restaurantProducts);
             }, 500);
 
@@ -220,7 +288,6 @@ const CompleteOffersAdmin = () => {
         setShowItemSelector(false);
         setItemSearch('');
 
-        console.log('✅ Added item:', newItem);
     };
 
     const updateEnhancedOrderItem = (index, field, value) => {
@@ -257,7 +324,6 @@ const CompleteOffersAdmin = () => {
         setStackingTestResults(null);
 
         try {
-            console.log('🧪 Testing offer stacking for restaurant:', enhancedTestConfig.restaurantId);
 
             const testData = {
                 userId: enhancedTestConfig.userId,
@@ -299,7 +365,6 @@ const CompleteOffersAdmin = () => {
                     const isInactive = !offer.isActive;
 
                     if (isInactive || isExpired) {
-                        console.log(`Excluding ${isInactive ? 'inactive' : 'expired'} offer from stacking:`, offer.name);
                         return false;
                     }
                     return true;
@@ -328,7 +393,6 @@ const CompleteOffersAdmin = () => {
 
                 // Apply stacking logic to the results
                 const stackedResults = applyStackingLogic(normalizedResults);
-                console.log('🔄 After stacking logic:', stackedResults);
 
                 const orderTotal = enhancedOrderItems.reduce((sum, item) => sum + item.total, 0);
                 const finalPrice = orderTotal + enhancedTestConfig.deliveryFee - stackedResults.totalSavings;
@@ -376,7 +440,6 @@ const CompleteOffersAdmin = () => {
         const cityRestaurants = getRestaurantsInCity(cityName);
 
         if (!cityRestaurants || cityRestaurants.length === 0) {
-            console.log('No restaurants found for city:', cityName);
             return;
         }
 
@@ -385,9 +448,7 @@ const CompleteOffersAdmin = () => {
             branchId: r.branchId
         }));
 
-        console.log('Deselecting city:', cityName);
-        console.log('City branches to remove:', cityBranches);
-        console.log('Current selected branches:', formData.RestaurantBranches);
+        
 
         setFormData(prev => {
             // Filter out all branches from this city
@@ -399,7 +460,6 @@ const CompleteOffersAdmin = () => {
                 return !shouldRemove; // Keep branches that should NOT be removed
             });
 
-            console.log('Updated branches after deselect:', updatedBranches);
 
             // Update restaurant IDs based on remaining branches
             const updatedRestaurantIds = [...new Set(updatedBranches.map(b => b.restaurantId))];
@@ -455,7 +515,6 @@ const CompleteOffersAdmin = () => {
         const cityRestaurants = getRestaurantsInCity(cityName);
 
         if (!cityRestaurants || cityRestaurants.length === 0) {
-            console.log('No restaurants found for city:', cityName);
             return;
         }
 
@@ -464,8 +523,6 @@ const CompleteOffersAdmin = () => {
             branchId: r.branchId
         }));
 
-        console.log('Selecting all for city:', cityName);
-        console.log('City branches to add:', cityBranches);
 
         setFormData(prev => {
             // Add to existing selection (avoiding duplicates)
@@ -480,8 +537,6 @@ const CompleteOffersAdmin = () => {
             const updatedBranches = [...existingBranches, ...newBranches];
             const updatedRestaurantIds = [...new Set(updatedBranches.map(b => b.restaurantId))];
 
-            console.log('New branches added:', newBranches);
-            console.log('Updated total branches:', updatedBranches);
 
             // Auto-expand restaurants in this city
             const cityRestaurantIds = [...new Set(cityRestaurants.map(r => r.id))];
@@ -861,7 +916,6 @@ const CompleteOffersAdmin = () => {
                         })
                         .filter(result => {
                             if (result.shouldSkip) {
-                                console.log(`Skipping ${result.isInactive ? 'inactive' : 'expired'} offer:`, result.offer?.name);
                                 return false;
                             }
                             return true;
@@ -894,7 +948,6 @@ const CompleteOffersAdmin = () => {
                         const isInactive = !offer.isActive;
 
                         if (isInactive || isExpired) {
-                            console.log(`Skipping ${isInactive ? 'inactive' : 'expired'} offer:`, offer.name);
                             return false;
                         }
                         return true;
@@ -952,7 +1005,6 @@ const CompleteOffersAdmin = () => {
     };
 
     const applyStackingLogic = (apiResults) => {
-        console.log('🔄 Applying stacking logic to', apiResults.length, 'offers');
 
         // Filter only applicable offers and sort by priority (highest first)
         const applicableOffers = apiResults
@@ -963,13 +1015,7 @@ const CompleteOffersAdmin = () => {
                 isStackable: result.details?.isStackable !== false // Default to true if not specified
             }))
             .sort((a, b) => b.priority - a.priority);
-        console.log("tttt", applicableOffers);
-        console.log('📊 Applicable offers sorted by priority:', applicableOffers.map(o => ({
-            name: o.details?.offerName,
-            priority: o.priority,
-            stackable: o.isStackable,
-            discount: o.discountAmount
-        })));
+        
 
         const processedOffers = [];
         let totalSavings = 0;
@@ -992,11 +1038,9 @@ const CompleteOffersAdmin = () => {
                 totalSavings += result.discountAmount || 0;
                 appliedCount++;
 
-                console.log(`✅ Applied: ${result.details?.name} - ${result.discountAmount} JOD (Stackable: ${result.details?.isStackable})`);
 
                 // Check if this offer is non-stackable
                 if (result.details?.isStackable === false) {
-                    console.log(`🚫 "${result.details?.name}" is NON-STACKABLE - stopping further processing`);
                     stoppingReason = `Non-stackable offer "${result.details?.name}" applied - remaining offers ignored`;
                     processingContinues = false;
                 }
@@ -1010,7 +1054,6 @@ const CompleteOffersAdmin = () => {
                     ignoredReason: 'Previous non-stackable offer was applied'
                 });
 
-                console.log(`❌ Blocked: ${result.details?.name} - would save ${result.discountAmount} JOD but blocked`);
 
             } else {
                 // This offer doesn't apply due to business rules
@@ -1022,11 +1065,7 @@ const CompleteOffersAdmin = () => {
             }
         });
 
-        console.log('🎯 Stacking Summary:');
-        console.log(`  Applied: ${appliedCount} offers`);
-        console.log(`  Total Savings: ${totalSavings} JOD`);
-        console.log(`  Reason: ${stoppingReason}`);
-
+        
         return {
             processedOffers,
             totalSavings,
@@ -1035,13 +1074,11 @@ const CompleteOffersAdmin = () => {
         };
     };
     const getFilteredAvailableItems = () => {
-        console.log('🔍 Filtering items. Available items:', availableItems.length);
         if (!itemSearch) return availableItems;
         const filtered = availableItems.filter(item =>
             item.name.toLowerCase().includes(itemSearch.toLowerCase()) ||
             (item.nameEn && item.nameEn.toLowerCase().includes(itemSearch.toLowerCase()))
         );
-        console.log('🔍 After search filter:', filtered.length);
         return filtered;
     };
 
@@ -1078,18 +1115,7 @@ const CompleteOffersAdmin = () => {
     const [selectedProductRestaurants, setSelectedProductRestaurants] = useState([]);
     const [subOfferType, setSubOfferType] = useState('order'); // 'product', 'category', 'order'
     const [comboTargetType, setComboTargetType] = useState('Product'); // 'product' or 'category'
-   
-    // Add these functions to your admin component
-    const loadRestaurants = async () => {
-        try {
-            const loadRestaurantsurl = API_BASE_URL.concat('/api/admin/OffersManagement/restaurants');
-            const response = await fetch(loadRestaurantsurl);
-            const data = await response.json();
-            setRestaurants(data);
-        } catch (error) {
-            console.error('Error loading restaurants:', error);
-        }
-    };
+    
 
     const loadProducts = async (restaurantIds = null, categoryId = null) => {
         try {
@@ -1107,7 +1133,6 @@ const CompleteOffersAdmin = () => {
 
             if (categoryId) loadProductsUrl += `categoryId=${categoryId}&`;
 
-            console.log('Loading products from:', loadProductsUrl);
             const response = await fetch(loadProductsUrl);
             const data = await response.json();
 
@@ -1116,7 +1141,6 @@ const CompleteOffersAdmin = () => {
                 restaurantId: product.restaurantId || 'unknown'
             }));
 
-            console.log('Loaded products:', productsWithRestaurantId.length);
             setProducts(productsWithRestaurantId);
         } catch (error) {
             console.error('Error loading products:', error);
@@ -1137,7 +1161,6 @@ const CompleteOffersAdmin = () => {
                 loadCategoriesurl += `?restaurantId=${restaurantIds}`;
             }
 
-            console.log('Loading categories from:', loadCategoriesurl);
             const response = await fetch(loadCategoriesurl);
             const data = await response.json();
 
@@ -1146,7 +1169,6 @@ const CompleteOffersAdmin = () => {
                 restaurantId: category.restaurantId || 'unknown'
             }));
 
-            console.log('Loaded categories:', categoriesWithRestaurantId.length);
             setCategories(categoriesWithRestaurantId);
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -1155,139 +1177,218 @@ const CompleteOffersAdmin = () => {
 
     const loadCategoriesForRestaurants = async (restaurantIds) => {
         try {
-            console.log('Loading categories for restaurants:', restaurantIds);
-            const allCategories = [];
 
-            for (const restaurantId of restaurantIds) {
-                const loadCategoriesurl = `${API_BASE_URL}/api/admin/OffersManagement/categories?restaurantId=${restaurantId}`;
-                const response = await fetch(loadCategoriesurl);
-                const data = await response.json();
+            // Check which restaurants are not cached and not currently loading
+            const uncachedRestaurants = restaurantIds.filter(id =>
+                !restaurantDataCache.categories.has(id) &&
+                !loadingRef.current.categories.has(id)
+            );
 
-                // Add restaurant info to each category INCLUDING RESTAURANT NAME
-                const restaurant = restaurants.find(r => r.id === restaurantId);
-                const categoriesWithRestaurant = data.map(category => ({
-                    ...category,
-                    restaurantId: restaurantId,
-                    restaurantName: restaurant?.name || 'Unknown Restaurant', // ADD THIS LINE
-                    restaurantNameEn: restaurant?.nameEn || '' // ADD THIS LINE TOO
-                }));
+            // If all data is cached, use cached data
+            if (uncachedRestaurants.length === 0) {
+                const cachedCategories = [];
+                restaurantIds.forEach(id => {
+                    if (restaurantDataCache.categories.has(id)) {
+                        cachedCategories.push(...restaurantDataCache.categories.get(id));
+                    }
+                });
 
+                // Remove duplicates based on category ID
+                const uniqueCategories = cachedCategories.filter((category, index, self) =>
+                    index === self.findIndex(c => c.id === category.id)
+                );
 
-                allCategories.push(...categoriesWithRestaurant);
+                setCategories(uniqueCategories);
+                return;
             }
 
-            // Remove duplicates based on category ID, keeping the first occurrence
-            const uniqueCategories = allCategories.filter((category, index, self) =>
+            // Mark restaurants as loading
+            uncachedRestaurants.forEach(id => {
+                loadingRef.current.categories.add(id);
+            });
+
+            const allCategories = [];
+
+            // Load only uncached restaurants
+            for (const restaurantId of uncachedRestaurants) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/categories?restaurantId=${restaurantId}`);
+                    const data = await response.json();
+
+                    const restaurant = restaurants.find(r => r.id === restaurantId);
+                    const categoriesWithRestaurant = data.map(category => ({
+                        ...category,
+                        restaurantId: restaurantId,
+                        restaurantName: restaurant?.name || 'Unknown Restaurant',
+                        restaurantNameEn: restaurant?.nameEn || ''
+                    }));
+
+                    // Cache the data
+                    setRestaurantDataCache(prev => ({
+                        ...prev,
+                        categories: new Map(prev.categories).set(restaurantId, categoriesWithRestaurant)
+                    }));
+
+                    allCategories.push(...categoriesWithRestaurant);
+                } finally {
+                    loadingRef.current.categories.delete(restaurantId);
+                }
+            }
+
+            // Combine new data with existing cached data for other selected restaurants
+            const existingCachedCategories = [];
+            restaurantIds.forEach(id => {
+                if (restaurantDataCache.categories.has(id) && !uncachedRestaurants.includes(id)) {
+                    existingCachedCategories.push(...restaurantDataCache.categories.get(id));
+                }
+            });
+
+            const combinedCategories = [...existingCachedCategories, ...allCategories];
+
+            // Remove duplicates
+            const uniqueCategories = combinedCategories.filter((category, index, self) =>
                 index === self.findIndex(c => c.id === category.id)
             );
 
-            console.log('Loaded unique categories:', uniqueCategories.length);
             setCategories(uniqueCategories);
+
         } catch (error) {
             console.error('Error loading categories for restaurants:', error);
+            // Clear loading flags on error
+            restaurantIds.forEach(id => {
+                loadingRef.current.categories.delete(id);
+            });
         }
     };
-
     const loadProductsForRestaurants = async (restaurantIds) => {
         try {
-            console.log('Loading products for restaurants:', restaurantIds);
-            const allProducts = [];
 
-            for (const restaurantId of restaurantIds) {
-                const loadProductsUrl = `${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`;
-                const response = await fetch(loadProductsUrl);
-                const data = await response.json();
+            // Check which restaurants are not cached and not currently loading
+            const uncachedRestaurants = restaurantIds.filter(id =>
+                !restaurantDataCache.products.has(id) &&
+                !loadingRef.current.products.has(id)
+            );
 
-                // Add restaurant info to each product INCLUDING RESTAURANT NAME
-                const restaurant = restaurants.find(r => r.id === restaurantId);
-                const productsWithRestaurant = data.map(product => ({
-                    ...product,
-                    restaurantId: restaurantId,
-                    restaurantName: restaurant?.name || 'Unknown Restaurant', // ADD THIS LINE
-                    restaurantNameEn: restaurant?.nameEn || '' // ADD THIS LINE TOO
-                }));
+            // If all data is cached, use cached data
+            if (uncachedRestaurants.length === 0) {
+                const cachedProducts = [];
+                restaurantIds.forEach(id => {
+                    if (restaurantDataCache.products.has(id)) {
+                        cachedProducts.push(...restaurantDataCache.products.get(id));
+                    }
+                });
 
-                allProducts.push(...productsWithRestaurant);
+                // Remove duplicates based on product ID
+                const uniqueProducts = cachedProducts.filter((product, index, self) =>
+                    index === self.findIndex(p => p.id === product.id)
+                );
+
+                setProducts(uniqueProducts);
+                return;
             }
 
-            // Remove duplicates based on product ID, keeping the first occurrence
-            const uniqueProducts = allProducts.filter((product, index, self) =>
+            // Mark restaurants as loading
+            uncachedRestaurants.forEach(id => {
+                loadingRef.current.products.add(id);
+            });
+
+            const allProducts = [];
+
+            // Load only uncached restaurants
+            for (const restaurantId of uncachedRestaurants) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`);
+                    const data = await response.json();
+
+                    const restaurant = restaurants.find(r => r.id === restaurantId);
+                    const productsWithRestaurant = data.map(product => ({
+                        ...product,
+                        restaurantId: restaurantId,
+                        restaurantName: restaurant?.name || 'Unknown Restaurant',
+                        restaurantNameEn: restaurant?.nameEn || ''
+                    }));
+
+                    // Cache the data
+                    setRestaurantDataCache(prev => ({
+                        ...prev,
+                        products: new Map(prev.products).set(restaurantId, productsWithRestaurant)
+                    }));
+
+                    allProducts.push(...productsWithRestaurant);
+                } finally {
+                    loadingRef.current.products.delete(restaurantId);
+                }
+            }
+
+            // Combine new data with existing cached data
+            const existingCachedProducts = [];
+            restaurantIds.forEach(id => {
+                if (restaurantDataCache.products.has(id) && !uncachedRestaurants.includes(id)) {
+                    existingCachedProducts.push(...restaurantDataCache.products.get(id));
+                }
+            });
+
+            const combinedProducts = [...existingCachedProducts, ...allProducts];
+
+            // Remove duplicates
+            const uniqueProducts = combinedProducts.filter((product, index, self) =>
                 index === self.findIndex(p => p.id === product.id)
             );
 
-            console.log('Loaded unique products:', uniqueProducts.length);
             setProducts(uniqueProducts);
+
         } catch (error) {
             console.error('Error loading products for restaurants:', error);
+            // Clear loading flags on error
+            restaurantIds.forEach(id => {
+                loadingRef.current.products.delete(id);
+            });
         }
     };
-   
     const getFilteredProductsByRestaurants = () => {
-        console.log('🔍 === FILTERING PRODUCTS/CATEGORIES ===');
-        console.log('✏️ Editing offer:', editingOffer?.offerId);
-        console.log('📝 Offer type:', formData.offerType);
-        console.log('📝 Sub offer type:', subOfferType);
-        console.log('🎯 Form targets:', formData.Targets);
-        console.log('🏪 RestaurantIds:', formData.RestaurantIds);
-        console.log('🏪 Selected product restaurants:', selectedProductRestaurants);
-
+       
         // Determine if we should show products or categories
         const isProductTarget = formData.offerType === 1 ||
             ([5, 6, 7, 9].includes(formData.offerType) && subOfferType === 'product');
 
-        console.log('🎯 Is product target:', isProductTarget);
 
         let items = isProductTarget ? products : categories;
-        console.log(`📦 Total ${isProductTarget ? 'products' : 'categories'} available:`, items.length);
 
         // Use RestaurantIds as the primary source of truth
         const restaurantsToFilter = formData.RestaurantIds;
-        console.log('🏪 Using restaurants for filtering:', restaurantsToFilter);
 
         // Debug: Log available items and their restaurant associations
         if (items.length > 0) {
-            console.log('📊 Sample items with restaurants:');
             items.slice(0, 5).forEach(item => {
-                console.log(`  - ${item.name} (ID: ${item.id}, Restaurant: ${item.restaurantId})`);
             });
         }
 
         // If no restaurant filter, show all items
         if (restaurantsToFilter.length === 0) {
-            console.log('🌐 No restaurant filter, showing all items');
             if (productSearch) {
                 items = items.filter(item =>
                     item.name.toLowerCase().includes(productSearch.toLowerCase()) ||
                     (item.nameEn && item.nameEn.toLowerCase().includes(productSearch.toLowerCase()))
                 );
             }
-            console.log('📊 Returning all items (no filter):', items.length);
             return items;
         }
 
         // Filter by selected restaurants
-        console.log('🏪 Filtering by restaurants:', restaurantsToFilter);
         const beforeFilter = items.length;
         items = items.filter(item => {
             const belongs = restaurantsToFilter.includes(item.restaurantId);
             if (belongs && items.indexOf(item) < 3) { // Log first few matches
-                console.log(`✅ ${item.name} belongs to restaurant ${item.restaurantId}`);
             }
             return belongs;
         });
-        console.log(`📊 After restaurant filter: ${items.length} (was ${beforeFilter})`);
 
         // Debug: If no items found, check why
         if (items.length === 0 && restaurantsToFilter.length > 0) {
-            console.log('❌ No items found! Debugging:');
-            console.log('🏪 Looking for restaurants:', restaurantsToFilter);
-            console.log('📦 Available restaurant IDs in items:',
-                [...new Set((isProductTarget ? products : categories).map(i => i.restaurantId))]);
-
+           
             // Check if any restaurant IDs match
             const availableRestaurantIds = [...new Set((isProductTarget ? products : categories).map(i => i.restaurantId))];
             const matchingIds = restaurantsToFilter.filter(id => availableRestaurantIds.includes(id));
-            console.log('🔗 Matching restaurant IDs:', matchingIds);
         }
 
         // Apply search filter
@@ -1297,28 +1398,9 @@ const CompleteOffersAdmin = () => {
                 item.name.toLowerCase().includes(productSearch.toLowerCase()) ||
                 (item.nameEn && item.nameEn.toLowerCase().includes(productSearch.toLowerCase()))
             );
-            console.log(`📊 After search filter: ${items.length} (was ${beforeSearch})`);
         }
 
-        console.log('📊 Final filtered items:', items.length);
         return items;
-    };
-    const handleSubOfferTypeChange = (newSubType) => {
-        console.log('🔄 Sub-offer type changing to:', newSubType);
-        setSubOfferType(newSubType);
-
-        // Clear existing targets when changing sub-type
-        setFormData(prev => ({ ...prev, Targets: [] }));
-
-        // If we have restaurants selected and the new sub-type needs products/categories
-        if (formData.RestaurantIds.length > 0 && ['product', 'category'].includes(newSubType)) {
-            console.log('📦 Loading data for new sub-type:', newSubType);
-            // Force reload of categories and products for selected restaurants
-            setTimeout(() => {
-                loadCategoriesForRestaurants(formData.RestaurantIds);
-                loadProductsForRestaurants(formData.RestaurantIds);
-            }, 100);
-        }
     };
     const toggleTargetSelection = (targetId) => {
         setFormData(prev => {
@@ -1333,48 +1415,33 @@ const CompleteOffersAdmin = () => {
     };
 
     const getFilteredComboItems = () => {
-        console.log('🔍 === FILTERING COMBO ITEMS ===');
-        console.log('📝 Combo target type:', comboTargetType);
-        console.log('🏪 RestaurantIds:', formData.RestaurantIds);
-        console.log('🔍 Selected combo restaurant:', selectedComboRestaurant);
-        console.log('🔍 Search term:', comboProductSearch);
+        
 
         let filteredItems = comboTargetType === 'Product' ? products : categories;
-        console.log(`📦 Total ${comboTargetType}s available:`, filteredItems.length);
 
         // Debug: Show sample items and their restaurant associations
         if (filteredItems.length > 0) {
-            console.log('📊 Sample items with restaurants:');
             filteredItems.slice(0, 3).forEach(item => {
-                console.log(`  - ${item.name} (ID: ${item.id}, Restaurant: ${item.restaurantId})`);
             });
         }
 
         // Filter by selected restaurants first
         const beforeRestaurantFilter = filteredItems.length;
         filteredItems = filteredItems.filter(item => formData.RestaurantIds.includes(item.restaurantId));
-        console.log(`📊 After restaurant filter: ${filteredItems.length} (was ${beforeRestaurantFilter})`);
 
         // Debug: If no items found after restaurant filter
         if (filteredItems.length === 0 && formData.RestaurantIds.length > 0) {
-            console.log('❌ No items found after restaurant filter! Debugging:');
-            console.log('🏪 Looking for restaurants:', formData.RestaurantIds);
+            
             const allItems = comboTargetType === 'product' ? products : categories;
             const availableRestaurantIds = [...new Set(allItems.map(i => i.restaurantId))];
-            console.log('📦 Available restaurant IDs in items:', availableRestaurantIds);
             const matchingIds = formData.RestaurantIds.filter(id => availableRestaurantIds.includes(id));
-            console.log('🔗 Matching restaurant IDs:', matchingIds);
-
-            if (matchingIds.length === 0) {
-                console.log('⚠️ No matching restaurants found! Need to reload data.');
-            }
+            
         }
 
         // Filter by specific restaurant if selected
         if (selectedComboRestaurant) {
             const beforeSpecificFilter = filteredItems.length;
             filteredItems = filteredItems.filter(item => item.restaurantId === selectedComboRestaurant);
-            console.log(`📊 After specific restaurant filter: ${filteredItems.length} (was ${beforeSpecificFilter})`);
         }
 
         // Filter by search
@@ -1384,10 +1451,8 @@ const CompleteOffersAdmin = () => {
                 item.name.toLowerCase().includes(comboProductSearch.toLowerCase()) ||
                 (item.nameEn && item.nameEn.toLowerCase().includes(comboProductSearch.toLowerCase()))
             );
-            console.log(`📊 After search filter: ${filteredItems.length} (was ${beforeSearch})`);
         }
 
-        console.log('📊 Final filtered combo items:', filteredItems.length);
         return filteredItems;
     };
 
@@ -1443,7 +1508,6 @@ const CompleteOffersAdmin = () => {
             );
 
             if (!hasDataForRestaurants) {
-                console.log('🔄 No data found for restaurants, reloading...');
                 if (comboTargetType === 'Product') {
                     loadProductsForRestaurants(formData.RestaurantIds);
                 } else {
@@ -1454,7 +1518,6 @@ const CompleteOffersAdmin = () => {
     };
 
     const handleComboTargetTypeChange = (newTargetType) => {
-        console.log('🔄 Combo target type changing to:', newTargetType);
         setComboTargetType(newTargetType);
 
         // Clear existing combo items when changing target type
@@ -1462,7 +1525,6 @@ const CompleteOffersAdmin = () => {
 
         // Load appropriate data for the new target type if restaurants are selected
         if (formData.RestaurantIds.length > 0) {
-            console.log('📦 Loading data for new combo target type:', newTargetType);
             if (newTargetType === 'Product') {
                 loadProductsForRestaurants(formData.RestaurantIds);
             } else {
@@ -1510,72 +1572,6 @@ const CompleteOffersAdmin = () => {
         }
     };
     
-    
-    // Sample data initialization
-    useEffect(() => {
-        loadRestaurants();
-        loadCategories();
-        loadProducts();
-        loadOffers();
-    }, []);
-    useEffect(() => {
-        console.log('🔄 === USEEFFECT: Offer Type/Restaurant Change ===');
-        console.log('📝 Current offer type:', formData.offerType);
-        console.log('📝 Current sub offer type:', subOfferType);
-        console.log('🏪 RestaurantIds:', formData.RestaurantIds);
-        console.log('🏪 Selected product restaurants:', selectedProductRestaurants);
-
-        // Determine if this offer type needs product/category targeting
-        const needsProductCategoryTargeting = formData.offerType === 1 || formData.offerType === 2 || 
-            ([5, 6, 7, 9].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
-
-        console.log('🎯 Needs product/category targeting:', needsProductCategoryTargeting);
-
-        if (needsProductCategoryTargeting) {
-            // Sync restaurant selections
-            if (formData.RestaurantIds.length > 0 &&
-                JSON.stringify(selectedProductRestaurants.sort()) !== JSON.stringify(formData.RestaurantIds.sort())) {
-                console.log('🔄 Syncing restaurant selections for targeting');
-                setSelectedProductRestaurants(formData.RestaurantIds);
-
-                // Load data for these restaurants
-                if (formData.RestaurantIds.length > 0) {
-                    console.log('📦 Loading categories and products for restaurants:', formData.RestaurantIds);
-                    loadCategoriesForRestaurants(formData.RestaurantIds);
-                    loadProductsForRestaurants(formData.RestaurantIds);
-                }
-            }
-        } else {
-            // For non-targeting offers, clear product restaurant selection
-            if (selectedProductRestaurants.length > 0) {
-                console.log('🧹 Clearing product restaurant selection (not needed)');
-                setSelectedProductRestaurants([]);
-            }
-        }
-    }, [formData.offerType, formData.RestaurantIds, subOfferType]); // Add subOfferType to dependencies
-
-    useEffect(() => {
-        console.log('🔄 === USEEFFECT: Combo Data Loading ===');
-        console.log('📝 Current offer type:', formData.offerType);
-        console.log('📝 Combo target type:', comboTargetType);
-        console.log('🏪 RestaurantIds:', formData.RestaurantIds);
-
-        // Load data specifically for combo offers when restaurants are selected
-        if (formData.offerType === 4 && formData.RestaurantIds.length > 0) {
-            console.log('🍕 Loading combo data for restaurants:', formData.RestaurantIds);
-
-            // Load both products and categories for combo offers since user can switch between them
-            loadCategoriesForRestaurants(formData.RestaurantIds);
-            loadProductsForRestaurants(formData.RestaurantIds);
-        }
-    }, [formData.offerType, formData.RestaurantIds, comboTargetType]);
-
-    useEffect(() => {
-        if (enhancedTestConfig.restaurantId) {
-            console.log('🎯 Restaurant changed, loading items using existing functions...');
-            loadItemsForRestaurant(enhancedTestConfig.restaurantId);
-        }
-    }, [enhancedTestConfig.restaurantId]);
 
     const renderDiscountTypeSelection = () => {
         const compatibleTypes = getCompatibleDiscountTypes(formData.offerType);
@@ -1726,18 +1722,15 @@ const CompleteOffersAdmin = () => {
 
             if (response.ok) {
                 const result = await response.json();
-                console.log('Offer saved successfully:', result);
 
                 if (editingOffer) {
                     // Update existing offer in the list
                     setOffers(prev => prev.map(offer =>
                         offer.offerId === editingOffer.offerId ? result : offer
                     ));
-                    console.log('Updated existing offer');
                 } else {
                     // Add new offer to the list
                     setOffers(prev => [...prev, result]);
-                    console.log('Added new offer');
                 }
 
                 // Reset form and close modal
@@ -1882,9 +1875,7 @@ const CompleteOffersAdmin = () => {
    
     const handleEdit = async (offer) => {
         try {
-            console.log('=== STARTING EDIT PROCESS ===');
-            console.log('Editing offer:', offer);
-
+           
             setEditingOffer(offer);
 
             // Fetch complete offer details from API
@@ -1898,10 +1889,8 @@ const CompleteOffersAdmin = () => {
             let offerDetail;
             if (response.ok) {
                 offerDetail = await response.json();
-                console.log('✅ Loaded offer detail from API:', offerDetail);
             } else {
                 offerDetail = offer;
-                console.log('⚠️ Using fallback offer data:', offerDetail);
             }
 
             // Handle branches properly for editing
@@ -1945,7 +1934,6 @@ const CompleteOffersAdmin = () => {
                     setRestaurants(newRestaurants);
                 }
             }
-            console.log('🌿 Converted branches:', selectedBranches);
 
 
             // Set restaurants to expanded state if they have selected branches
@@ -2033,7 +2021,6 @@ const CompleteOffersAdmin = () => {
                     setComboTargetType('Product'); // default
                 }
             }
-            console.log('📝 STEP 2: Setting form data:', formDataToSet);
             setFormData(formDataToSet);
 
             if (formDataToSet.RestaurantIds.length > 0) {
@@ -2070,10 +2057,8 @@ const CompleteOffersAdmin = () => {
 
 
             setShowCreateModal(true);
-            console.log('🎉 EDIT PROCESS COMPLETED SUCCESSFULLY');
 
         } catch (error) {
-            console.error('❌ Error in handleEdit:', error);
             // Fallback
             setFormData({
                 ...offer,
@@ -3207,11 +3192,7 @@ const CompleteOffersAdmin = () => {
         //const cities = getCitiesFromOffer(offer);
         const constraints = getConstraintDescriptions(offer);
         const result = getOfferCityCoverage(offer, restaurants);
-        if (result.hasAnyFullCity) {
-            console.log('Offer fully covers at least one city:', result.citiesFullyCovered);
-        } else {
-            console.log('No city is fully covered.');
-        }
+        
         const cities = result.citiesFullyCovered;
         const isOrderLevel = isOrderLevelOffer(offer);
 
@@ -3557,7 +3538,6 @@ const CompleteOffersAdmin = () => {
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            console.log('🔄 Manual reload triggered');
                                             if (comboTargetType === 'Product') {
                                                 loadProductsForRestaurants(formData.RestaurantIds);
                                             } else {
@@ -4298,7 +4278,6 @@ const CompleteOffersAdmin = () => {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => {
-                                        console.log('🔄 Manual data reload');
                                         loadProducts(enhancedTestConfig.restaurantId);
                                         loadCategories(enhancedTestConfig.restaurantId);
                                         setTimeout(() => {
