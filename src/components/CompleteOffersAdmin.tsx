@@ -27,8 +27,9 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    //const API_BASE_URL = 'http://localhost:5159';
+    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    const API_BASE_URL = 'http://localhost:5159';
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
 
@@ -53,26 +54,17 @@ const CompleteOffersAdmin = () => {
         startDate: null,
         endDate: null,
         isActive: true,
-
-        // BuyXGetY properties
-        buyQuantity: '',
-        getQuantity: '',
-        getDiscountPercent: 100,
-
         // Enhanced properties
         isFirstOrderOnly: false,
         userTiers: [],
         dayOfWeek: [],
         startTime: null,
         endTime: null,
-
         // NEW: Discount Application Flags (replaces separate Delivery offer type)
         applyToOrderSubtotal: true,  // Default: apply to order items
         applyToDeliveryFee: false,   // Optional: also apply to delivery
         
         minItemQuantity: '',
-        isComboOffer: false,
-        comboItems: [],
         couponCode: '',
         requiresCouponCode: false,
         flashSaleQuantity: '',
@@ -108,24 +100,26 @@ const CompleteOffersAdmin = () => {
         categories: new Map(), // restaurantId -> categories[]
         products: new Map()    // restaurantId -> products[]
     });
-    
-    // Load initial data only once
-    useEffect(() => {
-        const loadInitialData = async () => {
-            await Promise.all([
-                loadRestaurants(),
-                loadOffers()
-            ]);
-        };
-        loadInitialData();
-    }, []); // Only run once on mount
 
-// Load categories/products only when restaurants change and offer needs them
+    const loadInitialData = async () => {
+        if (!dataLoaded.restaurants && !loadingRef.current.restaurants) {
+            await loadRestaurants();
+        }
+        if (!dataLoaded.offers) {
+            await loadOffers();
+        }
+    };
+    useEffect(() => {
+        loadInitialData();
+    }, []); // Keep empty dependency array
+
     useEffect(() => {
         if (!dataLoaded.restaurants || formData.RestaurantIds.length === 0) return;
 
-        const needsProductCategoryData = [1, 2, 4].includes(formData.offerType) ||
-            ([5, 6, 7, 9].includes(formData.offerType) && ['product', 'category'].includes(subOfferType));
+        // Don't load products/categories for order-level offers (type 3)
+        if (formData.offerType === 3) return;
+
+        const needsProductCategoryData = [1, 2].includes(formData.offerType);
 
         if (needsProductCategoryData) {
             loadCategoriesForRestaurants(formData.RestaurantIds);
@@ -145,6 +139,7 @@ const CompleteOffersAdmin = () => {
             const data = await response.json();
             setRestaurants(data);
             setDataLoaded(prev => ({ ...prev, restaurants: true }));
+            setInitialLoadComplete(true); // Add this line
         } catch (error) {
             console.error('Error loading restaurants:', error);
         } finally {
@@ -152,23 +147,17 @@ const CompleteOffersAdmin = () => {
             setDataLoading(prev => ({ ...prev, restaurants: false }));
         }
     };
-
     
     const offerTypes = [
         { value: 1, label: 'Product Specific', icon: <Tag className="w-4 h-4" />, description: 'Discount on specific products', enabled: true },
         { value: 2, label: 'Category', icon: <Target className="w-4 h-4" />, description: 'Discount on product categories', enabled: true },
         { value: 3, label: 'Order Total', icon: <DollarSign className="w-4 h-4" />, description: 'Discount on entire order', enabled: true },
-        //{ value: 4, label: 'Combo Deal', icon: <Package className="w-4 h-4" />, description: 'Bundle offers', enabled: true },
-        //{ value: 5, label: 'Flash Sale', icon: <Zap className="w-4 h-4" />, description: 'Limited quantity offers', enabled: true }
-        // REMOVED: Delivery, FirstOrder, LoyaltyTier, TimeSlot - these become constraint flags
     ];
 
     // Update discount types array - remove FreeDelivery
     const discountTypes = [
         { value: 1, label: 'Percentage (%)', icon: <Percent className="w-4 h-4" /> },
         { value: 2, label: 'Fixed Amount (شيقل)', icon: <DollarSign className="w-4 h-4" /> },
-        { value: 3, label: 'Buy X Get Y', icon: <Gift className="w-4 h-4" /> }
-        // REMOVED: FreeDelivery - handled by ApplyToDeliveryFee flag
     ];
     const userTiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -188,8 +177,6 @@ const CompleteOffersAdmin = () => {
             1: 'Product Specific',
             2: 'Category',
             3: 'Order Total',
-            4: 'Combo Deal',
-            5: 'Flash Sale'
         };
         return names[offerType] || 'Unknown';
     };
@@ -198,7 +185,6 @@ const CompleteOffersAdmin = () => {
         const names = {
             1: 'Percentage',
             2: 'Fixed Amount',
-            3: 'Buy X Get Y'
         };
         return names[discountType] || 'Unknown';
     };
@@ -318,11 +304,9 @@ const CompleteOffersAdmin = () => {
             alert('Please add items to test');
             return;
         }
-
-
+        
         setStackingTestLoading(true);
         setStackingTestResults(null);
-
         try {
 
             const testData = {
@@ -630,28 +614,50 @@ const CompleteOffersAdmin = () => {
             </div>
 
             {/* Selected summary */}
+            // Replace the existing selected summary section with:
             {formData.RestaurantBranches.length > 0 && (
                 <div className="mb-3 p-3 bg-red-50 rounded-md">
                     <p className="text-sm font-medium text-blue-800 mb-2">
                         Selected: {formData.RestaurantIds.length} restaurants, {formData.RestaurantBranches.length} branches
                     </p>
                     <div className="space-y-1">
-                        {formData.RestaurantIds.map(restaurantId => {
-                            const restaurant = getUniqueRestaurants().find(r => r.id === restaurantId);
-                            const RestaurantBranches = getRestaurantBranchesForRestaurant(restaurantId);
-                            const totalBranches = getBranchesForRestaurant(restaurantId).length;
-
-                            return (
-                                <div key={restaurantId} className="text-xs">
-                                <span className="font-medium text-red-700">
-                                    {restaurant?.name || 'Unknown'}: 
-                                </span>
-                                    <span className="text-red-600 ml-1">
-                                    {RestaurantBranches.length} of {totalBranches} branches
-                                </span>
+                        {formData.offerType === 3 ? (
+                            // For order offers, show city-based summary
+                            Object.entries(
+                                formData.RestaurantBranches.reduce((acc, branch) => {
+                                    const restaurant = restaurants.find(r =>
+                                        r.id === branch.restaurantId && r.branchId === branch.branchId
+                                    );
+                                    const city = restaurant?.cityName || 'Unknown City';
+                                    if (!acc[city]) acc[city] = 0;
+                                    acc[city]++;
+                                    return acc;
+                                }, {})
+                            ).map(([city, count]) => (
+                                <div key={city} className="text-xs">
+                                    <span className="font-medium text-red-700">{city}: </span>
+                                    <span className="text-red-600">{parseInt(count as string, 10)} branches</span>
                                 </div>
-                            );
-                        })}
+                            ))
+                        ) : (
+                            // For other offer types, show restaurant names
+                            formData.RestaurantIds.map(restaurantId => {
+                                const restaurant = getUniqueRestaurants().find(r => r.id === restaurantId);
+                                const RestaurantBranches = getRestaurantBranchesForRestaurant(restaurantId);
+                                const totalBranches = getBranchesForRestaurant(restaurantId).length;
+
+                                return (
+                                    <div key={restaurantId} className="text-xs">
+                            <span className="font-medium text-red-700">
+                                {restaurant?.name || 'Unknown'}: 
+                            </span>
+                                        <span className="text-red-600 ml-1">
+                                {RestaurantBranches.length} of {totalBranches} branches
+                            </span>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             )}
@@ -1455,90 +1461,12 @@ const CompleteOffersAdmin = () => {
 
         return filteredItems;
     };
-
-
-    const addComboItem = (itemId) => {
-        const item = comboTargetType === 'Product'
-            ? products.find(p => p.id === itemId)
-            : categories.find(c => c.id === itemId);
-
-        if (!item) return;
-
-        // Check if item already exists in combo
-        const existingIndex = formData.comboItems.findIndex(comboItem => comboItem.productId === itemId);
-        if (existingIndex !== -1) return;
-
-        const newComboItem = {
-            productId: itemId, // Using productId field for both products and categories
-            requiredQuantity: 1,
-            discountPercent: 0,
-            targetType: comboTargetType // Track whether this is a product or category
-        };
-
-        setFormData(prev => ({
-            ...prev,
-            comboItems: [...prev.comboItems, newComboItem]
-        }));
-    };
-    const removeComboItem = (itemId) => {
-        setFormData(prev => ({
-            ...prev,
-            comboItems: prev.comboItems.filter(comboItem => comboItem.productId !== itemId)
-        }));
-    };
-
-    const updateComboItem = (itemId, field, value) => {
-        setFormData(prev => ({
-            ...prev,
-            comboItems: prev.comboItems.map(comboItem =>
-                comboItem.productId === itemId
-                    ? { ...comboItem, [field]: field === 'requiredQuantity' ? parseInt(value) || 1 : parseFloat(value) || 0 }
-                    : comboItem
-            )
-        }));
-    };
-    const handleComboRestaurantChange = (restaurantId) => {
-        setSelectedComboRestaurant(restaurantId);
-
-        // If no data is loaded yet for the selected restaurants, load it
-        if (formData.RestaurantIds.length > 0) {
-            const currentItems = comboTargetType === 'Product' ? products : categories;
-            const hasDataForRestaurants = formData.RestaurantIds.some(restId =>
-                currentItems.some(item => item.restaurantId === restId)
-            );
-
-            if (!hasDataForRestaurants) {
-                if (comboTargetType === 'Product') {
-                    loadProductsForRestaurants(formData.RestaurantIds);
-                } else {
-                    loadCategoriesForRestaurants(formData.RestaurantIds);
-                }
-            }
-        }
-    };
-
-    const handleComboTargetTypeChange = (newTargetType) => {
-        setComboTargetType(newTargetType);
-
-        // Clear existing combo items when changing target type
-        setFormData(prev => ({ ...prev, comboItems: [] }));
-
-        // Load appropriate data for the new target type if restaurants are selected
-        if (formData.RestaurantIds.length > 0) {
-            if (newTargetType === 'Product') {
-                loadProductsForRestaurants(formData.RestaurantIds);
-            } else {
-                loadCategoriesForRestaurants(formData.RestaurantIds);
-            }
-            // Small delay to ensure state is updated
-            setTimeout(() => {
-                console.log(`✅ After switching to ${newTargetType}:`,
-                    newTargetType === 'Product' ? products.length : categories.length, 'items loaded');
-            }, 500);
-        }
-    };
+    
+    
     const loadOffers = async () => {
         try {
+            if (dataLoaded.offers) return;
+
             const loadOffersUrl = API_BASE_URL.concat('/api/admin/OffersManagement');
             const response = await fetch(loadOffersUrl, {
                 headers: {
@@ -1612,6 +1540,35 @@ const CompleteOffersAdmin = () => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleOfferTypeChange = (newOfferType) => {
+        const previousOfferType = formData.offerType;
+
+        // If changing from order type (3) to any other type, clear restaurant selection
+        if (previousOfferType === 3 && newOfferType !== 3) {
+            setFormData(prev => ({
+                ...prev,
+                offerType: newOfferType,
+                RestaurantIds: [],
+                RestaurantBranches: [],
+                Targets: []
+            }));
+            setExpandedRestaurants([]);
+        }
+        // If changing to order type (3) from any other type, clear restaurant selection
+        else if (previousOfferType !== 3 && newOfferType === 3) {
+            setFormData(prev => ({
+                ...prev,
+                offerType: newOfferType,
+                RestaurantIds: [],
+                RestaurantBranches: [],
+                Targets: []
+            }));
+            setExpandedRestaurants([]);
+        }
+        else {
+            handleInputChange('offerType', newOfferType);
+        }
+    };
     const handleMultiSelect = (field, value) => {
         setFormData(prev => {
             const current = prev[field] || [];
@@ -1638,9 +1595,6 @@ const CompleteOffersAdmin = () => {
                 discountValue: parseFloat(formData.discountValue) || 0,
                 maxDiscountAmount: formData.maxDiscountAmount ? parseFloat(formData.maxDiscountAmount) : null,
                 minOrderAmount: formData.minOrderAmount ? parseFloat(formData.minOrderAmount) : null,
-                buyQuantity: formData.buyQuantity ? parseInt(formData.buyQuantity) : null,
-                getQuantity: formData.getQuantity ? parseInt(formData.getQuantity) : null,
-                getDiscountPercent: formData.getDiscountPercent ? parseFloat(formData.getDiscountPercent.toString()) : 0,
                 maxUsagePerUser: formData.maxUsagePerUser ? parseInt(formData.maxUsagePerUser) : null,
                 wheelsContribution: formData.wheelsContribution ? parseFloat(formData.wheelsContribution.toString()) : 0,
                 maxUsageTotal: formData.maxUsageTotal ? parseInt(formData.maxUsageTotal) : null,
@@ -1671,14 +1625,6 @@ const CompleteOffersAdmin = () => {
 
                 // Format targets based on offer type
                 Targets: (() => {
-                    // For Combo offers, use combo items as targets
-                    if (formData.offerType === 4 && formData.comboItems.length > 0) {
-                        const targetType = comboTargetType === 'Product' ? 1 : 2;
-                        return formData.comboItems.map(comboItem => ({
-                            targetType: targetType,
-                            targetId: comboItem.productId
-                        }));
-                    }
 
                     // For Product and Category offers, use selected targets
                     if ((formData.offerType === 1 || formData.offerType === 2) && formData.Targets.length > 0) {
@@ -1690,23 +1636,10 @@ const CompleteOffersAdmin = () => {
                             };
                         });
                     }
-
                     // For Order and Flash offers, no specific targets needed (or handled differently)
                     return [];
                 })(),
-
-                // Combo Items Configuration (only for Combo offers)
-                comboItems: formData.offerType === 4 ? formData.comboItems.map(item => ({
-                    productId: item.productId,
-                    RequiredQuantity: item.requiredQuantity,
-                    DiscountPercent: item.discountPercent,
-                    targetType: comboTargetType
-                })) : [],
-
-                // Additional properties for backward compatibility
-                isComboOffer: formData.offerType === 4,
-
-                comboTargetType: formData.offerType === 4 ? comboTargetType : null
+                
             };
 
             const url = editingOffer
@@ -1851,9 +1784,8 @@ const CompleteOffersAdmin = () => {
             offerType: 1, discountType: 1, discountValue: '',
             maxDiscountAmount: '', minOrderAmount: '', priority: 1, isStackable: true,
             maxUsagePerUser: '', wheelsContribution:0, maxUsageTotal: '', startDate: '', endDate: '',
-            isActive: true, buyQuantity: '', getQuantity: '', getDiscountPercent: 100,
-            isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
-            endTime: null, minItemQuantity: '', isComboOffer: false, comboItems: [],
+            isActive: true, isFirstOrderOnly: false, userTiers: [], dayOfWeek: [], startTime: null,
+            endTime: null, minItemQuantity: '',
             couponCode: '', requiresCouponCode: false, flashSaleQuantity: '',
             RestaurantIds: [], RestaurantBranches: [], Targets: [], applyToDeliveryFee: true,applyToOrderSubtotal: false,
         });
@@ -1868,9 +1800,7 @@ const CompleteOffersAdmin = () => {
 
         setEditingOffer(null);
 
-        // Reset products and categories to show all
-        loadCategories();
-        loadProducts();
+       
     };
    
     const handleEdit = async (offer) => {
@@ -2029,10 +1959,13 @@ const CompleteOffersAdmin = () => {
                 // IMPORTANT: Wait for restaurants to be fully loaded first
                 await new Promise(resolve => setTimeout(resolve, 100));
 
-                await Promise.all([
-                    loadCategoriesForRestaurants(formDataToSet.RestaurantIds),
-                    loadProductsForRestaurants(formDataToSet.RestaurantIds)
-                ]);
+                if(offerDetail.offerType != 3){
+                    await Promise.all([
+                        loadCategoriesForRestaurants(formDataToSet.RestaurantIds),
+                        loadProductsForRestaurants(formDataToSet.RestaurantIds)
+                    ]);
+                }
+                
             }
 
             // Load data for product/category offers
@@ -2281,8 +2214,6 @@ const CompleteOffersAdmin = () => {
         const errors = [];
         let discountValueD = parseFloat(formData.discountValue);
         let flashSaleQuantityD = parseFloat(formData.flashSaleQuantity);
-        let buyQuantityD = parseFloat(formData.buyQuantity);
-        let getQuantityD = parseFloat(formData.getQuantity);
 
         // Basic required fields
         if (!formData.name.trim()) errors.push('Offer name (Arabic) is required');
@@ -2306,11 +2237,7 @@ const CompleteOffersAdmin = () => {
             case 2: // Category
                 if (formData.Targets.length === 0) errors.push('At least one category must be selected');
                 break;
-
-            case 4: // Combo Deal
-                if (formData.comboItems.length === 0) errors.push('At least one combo item must be added');
-                break;
-
+                
             case 5: // Flash Sale
                 if (!formData.flashSaleQuantity || (!isNaN(flashSaleQuantityD) && flashSaleQuantityD <= 0)) {
                     errors.push('Flash sale quantity must be greater than 0');
@@ -2318,15 +2245,7 @@ const CompleteOffersAdmin = () => {
                 break;
         }
 
-        // Discount type specific validation
-        if (formData.discountType === 3) { // BuyXGetY
-            if (!formData.buyQuantity || (!isNaN(buyQuantityD) && buyQuantityD <= 0)) {
-                errors.push('Buy quantity must be greater than 0');
-            }
-            if (!formData.getQuantity || (!isNaN(getQuantityD) && getQuantityD <= 0)) {
-                errors.push('Get quantity must be greater than 0');
-            }
-        }
+        
 
         // Date validation
         if (formData.startDate && formData.endDate) {
@@ -2443,7 +2362,7 @@ const CompleteOffersAdmin = () => {
                                 <button
                                     key={type.value}
                                     type="button"
-                                    onClick={() => handleInputChange('offerType', type.value)}
+                                    onClick={() => handleOfferTypeChange(type.value)}
                                     className={`p-4 border rounded-lg text-left hover:shadow-md transition-shadow ${
                                         formData.offerType === type.value
                                             ? 'border-red-500 bg-red-50 text-red-700'
@@ -2466,46 +2385,6 @@ const CompleteOffersAdmin = () => {
                     {/* Discount Configuration - Conditional */}
                     <div className="border rounded-lg p-4 ">
                         <h3 className="font-medium mb-3">Discount Type Configuration</h3>
-
-                        {/* BuyXGetY Configuration */}
-                        {shouldShowField('buyQuantity', formData.offerType, formData.discountType) && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Buy Quantity *</label>
-                                    <input
-                                        type="number"
-                                        value={formData.buyQuantity}
-                                        onChange={(e) => handleInputChange('buyQuantity', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        min="1"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Get Quantity *</label>
-                                    <input
-                                        type="number"
-                                        value={formData.getQuantity}
-                                        onChange={(e) => handleInputChange('getQuantity', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        min="1"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Get Discount %</label>
-                                    <input
-                                        type="number"
-                                        value={formData.getDiscountPercent}
-                                        onChange={(e) => handleInputChange('getDiscountPercent', e.target.value)}
-                                        className="w-full p-2 border rounded-md"
-                                        min="0"
-                                        max="100"
-                                        placeholder="100 = Free"
-                                    />
-                                </div>
-                            </div>
-                        )}
 
                         {/* Standard Discount Configuration */}
                         {[1, 2].includes(formData.discountType) && (
@@ -3063,10 +2942,7 @@ const CompleteOffersAdmin = () => {
                         renderRestaurantBranchSelection()
                     }
 
-                    {/* Combo Section - Conditional */}
-                    {shouldShowField('comboSection', formData.offerType, formData.discountType) &&
-                        renderComboSection()
-                    }
+                    
 
                     {/* Target Selection - Conditional */}
                     {shouldShowField('targetSelection', formData.offerType, formData.discountType, subOfferType) &&
@@ -3356,274 +3232,7 @@ const CompleteOffersAdmin = () => {
         );
     };
     
-
-    // Modified combo section to work with restaurant-specific products
-    const renderComboSection = () => {
-        if (formData.offerType !== 4) return null;
-
-        return (
-            <div className="border rounded-lg p-4 bg-orange-50">
-                <h3 className="font-medium mb-3 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-orange-600" />
-                    Combo Deal Configuration
-                </h3>
-
-                {/* Warning if no restaurants selected */}
-                {formData.RestaurantIds.length === 0 && (
-                    <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded text-sm text-red-700">
-                        <strong>⚠️ Please select restaurants above first</strong><br/>
-                        Combo items can only be selected from products/categories available in the selected restaurants.
-                    </div>
-                )}
-
-                {formData.RestaurantIds.length > 0 && (
-                    <>
-                        {/* Debug info - remove in production */}
-                        <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                            <strong>Debug:</strong>
-                            Target: {comboTargetType},
-                            Restaurants: {formData.RestaurantIds.length},
-                            Products: {products.length},
-                            Categories: {categories.length},
-                            Filtered: {getFilteredComboItems().length}
-                        </div>
-
-                        {/* Combo Target Type Selection */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium mb-2">Combo Target Type</label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => handleComboTargetTypeChange('Product')}
-                                    className={`p-3 border rounded-md text-left ${
-                                        comboTargetType === 'Product'
-                                            ? 'border-orange-500 bg-orange-100 text-orange-700'
-                                            : 'border-gray-300 hover:border-gray-400'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Tag className="w-4 h-4" />
-                                        <span className="font-medium">Products</span>
-                                    </div>
-                                    <p className="text-xs text-gray-600">Combo with specific products</p>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleComboTargetTypeChange('Category')}
-                                    className={`p-3 border rounded-md text-left ${
-                                        comboTargetType === 'Category'
-                                            ? 'border-orange-500 bg-orange-100 text-orange-700'
-                                            : 'border-gray-300 hover:border-gray-400'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Target className="w-4 h-4" />
-                                        <span className="font-medium">Categories</span>
-                                    </div>
-                                    <p className="text-xs text-gray-600">Combo with product categories</p>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Restaurant filter for combo items */}
-                        {formData.RestaurantIds.length > 1 && (
-                            <div className="mb-3">
-                                <label className="block text-sm font-medium mb-1">Filter by Restaurant</label>
-                                <select
-                                    value={selectedComboRestaurant}
-                                    onChange={(e) => handleComboRestaurantChange(e.target.value)}
-                                    className="w-full p-2 border rounded-md"
-                                >
-                                    <option value="">All Selected Restaurants</option>
-                                    {restaurants
-                                        .filter(r => formData.RestaurantIds.includes(r.id))
-                                        .map(restaurant => (
-                                            <option key={restaurant.id} value={restaurant.id}>
-                                                {restaurant.name}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
-                        )}
-
-                        {/* Selected combo items */}
-                        {formData.comboItems.length > 0 && (
-                            <div className="mb-4 p-3 bg-orange-100 rounded-md">
-                                <p className="text-sm font-medium text-orange-800 mb-3">
-                                    Selected Combo Items ({formData.comboItems.length}):
-                                </p>
-                                <div className="space-y-2">
-                                    {formData.comboItems.map(comboItem => {
-                                        const item = comboTargetType === 'Product'
-                                            ? products.find(p => p.id === comboItem.productId)
-                                            : categories.find(c => c.id === comboItem.productId);
-                                        const restaurant = restaurants.find(r => r.id === item?.restaurantId);
-                                        return item ? (
-                                            <div key={comboItem.productId} className="bg-white p-3 rounded border">
-                                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                                                    <div>
-                                                        <span className="font-medium text-sm">{item.name}</span>
-                                                        {comboTargetType === 'Product' && item.price && (
-                                                            <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
-                                                        )}
-                                                        <span className="text-xs text-red-600 block">
-                                                        {restaurant?.name || 'Unknown Restaurant'}
-                                                    </span>
-                                                        <span className="text-xs text-purple-600 block">
-                                                        {comboTargetType === 'Product' ? 'Product' : 'Category'}
-                                                    </span>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs text-gray-600 mb-1">Required Qty</label>
-                                                        <input
-                                                            type="number"
-                                                            value={comboItem.requiredQuantity}
-                                                            onChange={(e) => updateComboItem(comboItem.productId, 'requiredQuantity', e.target.value)}
-                                                            className="w-full p-1 border rounded text-sm"
-                                                            min="1"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs text-gray-600 mb-1">Discount %</label>
-                                                        <input
-                                                            type="number"
-                                                            value={comboItem.discountPercent}
-                                                            onChange={(e) => updateComboItem(comboItem.productId, 'discountPercent', e.target.value)}
-                                                            className="w-full p-1 border rounded text-sm"
-                                                            min="0"
-                                                            max="100"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-xs text-gray-600">Est. Savings/combo</span>
-                                                        <span className="block text-sm font-medium text-green-600">
-                                                        {comboTargetType === 'product' && item.price ?
-                                                            ((item.price || 0) * comboItem.requiredQuantity * (comboItem.discountPercent / 100)).toFixed(2) + ' شيقل'
-                                                            : 'Variable'
-                                                        }
-                                                    </span>
-                                                    </div>
-                                                    <div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeComboItem(comboItem.productId)}
-                                                            className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : null;
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Add Items Section */}
-                        <div className="border rounded-md">
-                            <div className="p-3 bg-gray-50 border-b flex items-center justify-between">
-                                <h4 className="font-medium text-sm">
-                                    Add {comboTargetType === 'Product' ? 'Products' : 'Categories'} to Combo
-                                </h4>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder={`Search ${comboTargetType === 'Product' ? 'products' : 'categories'}...`}
-                                        value={comboProductSearch}
-                                        onChange={(e) => setComboProductSearch(e.target.value)}
-                                        className="px-2 py-1 border rounded text-sm w-48"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (comboTargetType === 'Product') {
-                                                loadProductsForRestaurants(formData.RestaurantIds);
-                                            } else {
-                                                loadCategoriesForRestaurants(formData.RestaurantIds);
-                                            }
-                                        }}
-                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                                    >
-                                        Reload
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="max-h-48 overflow-y-auto">
-                                {getFilteredComboItems().length === 0 ? (
-                                    <div className="p-4 text-center text-gray-500">
-                                        <p>No {comboTargetType === 'Product' ? 'products' : 'categories'} found</p>
-                                        <div className="text-xs mt-2 space-y-1">
-                                            <p>Restaurants selected: {formData.RestaurantIds.length}</p>
-                                            <p>Total {comboTargetType}s: {comboTargetType === 'Product' ? products.length : categories.length}</p>
-                                            <p>Check console for debugging info</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (comboTargetType === 'Product') {
-                                                    loadProductsForRestaurants(formData.RestaurantIds);
-                                                } else {
-                                                    loadCategoriesForRestaurants(formData.RestaurantIds);
-                                                }
-                                            }}
-                                            className="mt-2 px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700"
-                                        >
-                                            Try Reload Data
-                                        </button>
-                                    </div>
-                                ) : (
-                                    getFilteredComboItems().map(item => {
-                                        const isSelected = formData.comboItems.some(comboItem => comboItem.productId === item.id);
-                                        const restaurant = restaurants.find(r => r.id === item.restaurantId);
-                                        return (
-                                            <div key={item.id} className={`p-3 border-b flex items-center justify-between hover:bg-gray-50 ${
-                                                isSelected ? 'bg-orange-50 opacity-60' : ''
-                                            }`}>
-                                                <div className="flex-1">
-                                                    <span className="text-sm font-medium">{item.name}</span>
-                                                    {comboTargetType === 'Product' && item.price && (
-                                                        <span className="text-xs text-gray-500 block">{item.price} شيقل</span>
-                                                    )}
-                                                    <span className="text-xs text-red-500">
-                    {item.restaurantName || 'Unknown Restaurant'}
-                                                </span>
-                                                </div>
-
-                                                {isSelected ? (
-                                                    <span className="text-xs text-orange-600 font-medium">Already Added</span>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => addComboItem(item.id)}
-                                                        className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 flex items-center gap-1"
-                                                    >
-                                                        <Plus className="w-3 h-3" />
-                                                        Add
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Combo Summary */}
-                        {formData.comboItems.length > 0 && (
-                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-sm">
-                                <strong>Combo Summary:</strong> {formData.comboItems.length} items selected.
-                                When customers buy all required quantities, they'll get the specified discounts on each item.
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-        );
-    };
-
+    
     // Modified product/category selection section
     const renderTargetSelection = () => {
         // Show for product/category offers OR sub-targeted loyalty/timeslot/firstorder offers
@@ -4386,17 +3995,6 @@ const CompleteOffersAdmin = () => {
                                 <div className="text-sm text-green-500">Active</div>
                             </div>
                         </div>
-                        {activeTab === 'list' && (
-                            <label className="flex items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={showCityOnlyOffers}
-                                    onChange={(e) => setShowCityOnlyOffers(e.target.checked)}
-                                    className="rounded"
-                                />
-                                <span className="font-medium">Order level Offers</span>
-                            </label>
-                        )}
 
                         {/* Enhanced Tab Navigation - Equal Width */}
                         <div className="grid grid-cols-4 gap-1 p-1 bg-gray-100 rounded-lg w-full max-w-md">
@@ -4454,18 +4052,6 @@ const CompleteOffersAdmin = () => {
                 {activeTab === 'list' && (
                     <div className="w-full">
                         
-                        {/* Filter Info */}
-                        {showCityOnlyOffers && (
-                            <div className="mb-6 p-3 bg-purple-50 border border-purple-200 rounded-md">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-purple-800 font-medium">🏙️ Showing city-wide offers only</span>
-                                    <span className="text-purple-600 text-sm">
-                                    (Order-level offers that apply to entire cities)
-                                </span>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Offers Grid - Full Width */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                             {offers
