@@ -1,16 +1,19 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import CompleteOffersAdmin from './components/CompleteOffersAdmin';
-
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
-import MainApp from "./components/MainApp.js";   // ← important
+import MainApp from "./components/MainApp.js";
+import { AuthProvider } from './contexts/AuthContext';
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+ReactDOM.createRoot(document.getElementById('root')).render(
+    <AuthProvider>
+        <MainApp />
+    </AuthProvider>
+);
 
 export default function App() {
-    return <MainApp />;
+    return (
+        <AuthProvider>
+            <MainApp />
+        </AuthProvider>
+    );
 }

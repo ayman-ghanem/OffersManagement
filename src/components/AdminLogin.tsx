@@ -1,49 +1,28 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Shield, Lock, User, AlertCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-const AdminLogin = ({ onLogin }) => {
+const AdminLogin = () => {
     const [formData, setFormData] = useState({
         username: '',
         password: ''
     });
     const [showPassword, setShowPassword] = useState(false);
-    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    // Static credentials for mockup (replace with API call later)
-    const MOCK_CREDENTIALS = {
-        username: 'admin@wheelsnow.com',
-        password: 'Admin@123',
-        token: 'mock-jwt-token-admin-role-12345',
-        role: 'admin'
-    };
+    const { login, loading } = useAuth();
 
     const handleSubmit = async () => {
-        setLoading(true);
         setError('');
 
-        try {
-            // Simulate API call delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!formData.username || !formData.password) {
+            setError('Please enter both username and password');
+            return;
+        }
 
-            // Mock validation
-            if (formData.username === MOCK_CREDENTIALS.username &&
-                formData.password === MOCK_CREDENTIALS.password) {
-
-                // Store token in localStorage
-                localStorage.setItem('authToken', MOCK_CREDENTIALS.token);
-                localStorage.setItem('userRole', MOCK_CREDENTIALS.role);
-                localStorage.setItem('username', formData.username);
-
-                // Call parent login handler
-                onLogin(MOCK_CREDENTIALS.token);
-            } else {
-                setError('Invalid username or password');
-            }
-        } catch (err) {
-            setError('Login failed. Please try again.');
-        } finally {
-            setLoading(false);
+        const result = await login(formData.username, formData.password);
+        
+        if (!result.success) {
+            setError(result.error || 'Login failed. Please try again.');
         }
     };
 
@@ -123,11 +102,11 @@ const AdminLogin = ({ onLogin }) => {
                             </div>
                         )}
 
-                        {/* Demo Credentials */}
-                        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                            <p className="text-xs text-gray-600 font-medium mb-2">Demo Credentials:</p>
-                            <p className="text-xs text-gray-700">Username: admin@wheelsnow.com</p>
-                            <p className="text-xs text-gray-700">Password: Admin@123</p>
+                        {/* API Info */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-xs text-blue-600 font-medium mb-2">API Authentication:</p>
+                            <p className="text-xs text-blue-700">Endpoint: POST /api/admin/OffersManagement/login</p>
+                            <p className="text-xs text-blue-700">Enter your valid credentials to continue</p>
                         </div>
 
                         {/* Login Button */}

@@ -149,7 +149,17 @@ const CompleteOffersAdmin = () => {
         setDataLoading(prev => ({ ...prev, restaurants: true }));
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/restaurants`);
+            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/restaurants`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             setRestaurants(data);
             setDataLoaded(prev => ({ ...prev, restaurants: true }));
@@ -488,7 +498,17 @@ const CompleteOffersAdmin = () => {
             // Load only uncached restaurants
             for (const restaurantId of uncachedRestaurants) {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/categories?restaurantId=${restaurantId}`);
+                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/categories?restaurantId=${restaurantId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
 
                     const restaurant = restaurants.find(r => r.id === restaurantId);
@@ -573,7 +593,17 @@ const CompleteOffersAdmin = () => {
             // Load only uncached restaurants
             for (const restaurantId of uncachedRestaurants) {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`);
+                    const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
 
                     const restaurant = restaurants.find(r => r.id === restaurantId);
@@ -840,7 +870,10 @@ const CompleteOffersAdmin = () => {
 
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json' 
+                },
                 body: JSON.stringify(offerData)
             });
 
@@ -1201,7 +1234,18 @@ const CompleteOffersAdmin = () => {
         if (window.confirm('Are you sure you want to delete this offer?')) {
             try {
                 const handledeleteurl = API_BASE_URL.concat('/api/admin/OffersManagement/' + offerId);
-                await fetch(handledeleteurl, { method: 'DELETE' });
+                const response = await fetch(handledeleteurl, { 
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 setOffers(prev => prev.filter(offer => offer.offerId !== offerId));
             } catch (error) {
                 console.error('Error deleting offer:', error);

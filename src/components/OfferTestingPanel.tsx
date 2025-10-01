@@ -38,7 +38,17 @@ const OfferTestingPanel = ({
 
     const loadProductsForRestaurant = async (restaurantId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`);
+            const response = await fetch(`${API_BASE_URL}/api/admin/OffersManagement/products?restaurantId=${restaurantId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             setAvailableItems(data.map(p => ({ ...p, type: 'product' })));
         } catch (error) {

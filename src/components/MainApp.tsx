@@ -1,59 +1,10 @@
-import { useState, useEffect } from 'react';
 import { LogOut, Shield, User, Settings } from 'lucide-react';
 import CompleteOffersAdmin from './CompleteOffersAdmin';
 import AdminLogin from "./AdminLogin";
+import { useAuth } from '../contexts/AuthContext';
 
 const MainApp = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    // Check authentication status on app load
-    useEffect(() => {
-        checkAuthStatus();
-    }, []);
-
-    const checkAuthStatus = () => {
-        try {
-            const token = localStorage.getItem('authToken');
-            const role = localStorage.getItem('userRole');
-            const username = localStorage.getItem('username');
-
-            if (token && role === 'admin' && username) {
-                setUser({ username, role, token });
-                setIsAuthenticated(true);
-            } else {
-                // Clear any invalid stored data
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('userRole');
-                localStorage.removeItem('username');
-                setIsAuthenticated(false);
-                setUser(null);
-            }
-        } catch (error) {
-            console.error('Auth check failed:', error);
-            setIsAuthenticated(false);
-            setUser(null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleLogin = (token) => {
-        // Re-check auth status after login
-        checkAuthStatus();
-    };
-
-    const handleLogout = () => {
-        // Clear stored data
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('username');
-
-        // Reset state
-        setIsAuthenticated(false);
-        setUser(null);
-    };
+    const { isAuthenticated, user, loading, logout } = useAuth();
 
     // Show loading spinner while checking auth
     if (loading) {
@@ -69,7 +20,7 @@ const MainApp = () => {
 
     // Show login if not authenticated
     if (!isAuthenticated) {
-        return <AdminLogin onLogin={handleLogin} />;
+        return <AdminLogin />;
     }
 
     // Show admin panel if authenticated
@@ -116,7 +67,7 @@ const MainApp = () => {
                                 <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                                     <div className="p-1">
                                         <button
-                                            onClick={handleLogout}
+                                            onClick={logout}
                                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                         >
                                             <LogOut className="w-4 h-4" />
