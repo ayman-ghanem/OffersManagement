@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LogOut, Shield, User, Settings } from 'lucide-react';
-import AdminLogin from './AdminLogin';
 import CompleteOffersAdmin from './CompleteOffersAdmin';
+import AdminLogin from "./AdminLogin";
 
 const MainApp = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);

@@ -1,69 +1,65 @@
+import React, { useEffect, useState } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, PieChart, Pie, Cell, Legend
+    LineChart, Line, PieChart, Pie, Cell, Legend, Area, AreaChart
 } from 'recharts';
 import {
     TrendingUp, TrendingDown, DollarSign, Users, Target,
-    Calendar, Clock, Award, Zap, Filter, Download, RefreshCw
+    Calendar, Clock, Award, Zap, Filter, Download, RefreshCw,
+    AlertCircle, CheckCircle, Activity
 } from 'lucide-react';
-import {useEffect, useState} from "react";
 
-const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
+const OffersAnalyticsDashboard = ({ API_BASE_URL }) => {
     const [analyticsData, setAnalyticsData] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [dateRange, setDateRange] = useState('30'); // days
-    const [selectedOfferType, setSelectedOfferType] = useState('all');
+    const [error, setError] = useState(null);
 
-    // Mock data for demonstration - replace with real API calls
-    const [mockMetrics] = useState({
-        totalRevenue: 45620,
-        totalSavings: 15430,
-        customerUsage: 1247,
-        conversionRate: 23.5,
-        avgOrderValue: 35.2,
-        newCustomers: 312
+    // Date range state
+    const [startDate, setStartDate] = useState(() => {
+        const date = new Date();
+        date.setMonth(date.getMonth() - 1);
+        return date.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0];
     });
 
-    const [offerPerformanceData] = useState([
-        { name: 'Product', offers: 12, revenue: 15400, usage: 450, conversionRate: 28.5 },
-        { name: 'Category', offers: 8, revenue: 12300, usage: 380, conversionRate: 24.2 },
-        { name: 'Order Total', offers: 6, revenue: 8900, usage: 220, conversionRate: 31.8 },
-        { name: 'First Order', offers: 4, revenue: 6800, usage: 140, conversionRate: 42.1 },
-        { name: 'Loyalty', offers: 5, revenue: 4200, usage: 95, conversionRate: 18.9 },
-        { name: 'Time-Based', offers: 3, revenue: 2900, usage: 85, conversionRate: 35.6 },
-        { name: 'Flash Sale', offers: 2, revenue: 8900, usage: 180, conversionRate: 78.2 }
-    ]);
+    const [selectedRestaurant, setSelectedRestaurant] = useState('');
 
-    const [revenueData] = useState([
-        { date: '2025-01', baseline: 85000, withOffers: 102000, growth: 20 },
-        { date: '2025-02', baseline: 88000, withOffers: 112000, growth: 27.3 },
-        { date: '2025-03', baseline: 91000, withOffers: 118000, growth: 29.7 },
-        { date: '2025-04', baseline: 89000, withOffers: 125000, growth: 40.4 },
-        { date: '2025-05', baseline: 93000, withOffers: 135000, growth: 45.2 },
-        { date: '2025-06', baseline: 96000, withOffers: 142000, growth: 47.9 }
-    ]);
-
-    const [customerSegmentData] = useState([
-        { segment: 'New Customers', value: 35, color: '#ef4444' },
-        { segment: 'Bronze Tier', value: 28, color: '#f59e0b' },
-        { segment: 'Silver Tier', value: 22, color: '#6b7280' },
-        { segment: 'Gold Tier', value: 12, color: '#eab308' },
-        { segment: 'Platinum Tier', value: 3, color: '#8b5cf6' }
-    ]);
-
+    // Load analytics from API
     const loadAnalytics = async () => {
         setLoading(true);
-        try {
-            // Replace with actual API call
-            // const response = await fetch(`${API_BASE_URL}/api/admin/analytics/offers?days=${dateRange}`);
-            // const data = await response.json();
-            // setAnalyticsData(data);
+        setError(null);
 
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setAnalyticsData(mockMetrics);
+        try {
+            const params = new URLSearchParams({
+                startDate: startDate,
+                endDate: endDate
+            });
+
+            if (selectedRestaurant) {
+                params.append('restaurantId', selectedRestaurant);
+            }
+
+            const response = await fetch(
+                `${API_BASE_URL}/api/admin/OffersManagement/analytics?${params.toString()}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to load analytics');
+            }
+
+            const data = await response.json();
+            setAnalyticsData(data);
         } catch (error) {
             console.error('Error loading analytics:', error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -71,22 +67,27 @@ const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
 
     useEffect(() => {
         loadAnalytics();
-    }, [dateRange]);
+    }, [startDate, endDate, selectedRestaurant]);
 
-    const MetricCard = ({ title, value, change, icon: Icon, color, prefix = '', suffix = '' }) => (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+    // Calculate derived metrics
+    const metrics = analyticsData ? {
+        totalOffers: analyticsData.totalOffers,
+        activeOffers: analyticsData.activeOffers,
+        expiredOffers: analyticsData.expiredOffers,
+        flashSalesSoldOut: analyticsData.flashSalesSoldOut,
+        totalDiscountGiven: analyticsData.totalDiscountGiven,
+        averageDiscountPerOrder: analyticsData.averageDiscountPerOrder,
+        totalUsage: analyticsData.dailyUsage?.reduce((sum, day) => sum + day.usageCount, 0) || 0,
+        uniqueUsers: analyticsData.dailyUsage?.reduce((sum, day) => sum + day.uniqueUsers, 0) || 0
+    } : null;
+
+    const MetricCard = ({ title, value, icon: Icon, color, prefix = '', suffix = '' }) => (
+        <div className="bg-white rounded-xl border-2 border-gray-200 p-6 hover:shadow-lg transition-all">
             <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg ${color}`}>
+                <div className={`p-3 rounded-xl ${color}`}>
                     <Icon className="w-6 h-6 text-white" />
                 </div>
-                {change && (
-                    <div className={`flex items-center gap-1 text-sm font-medium ${
-                        change > 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                        {change > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                        {Math.abs(change)}%
-                    </div>
-                )}
+                
             </div>
             <div className="space-y-1">
                 <h3 className="text-2xl font-bold text-gray-900">
@@ -98,13 +99,13 @@ const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
     );
 
     const exportAnalytics = () => {
+        if (!analyticsData) return;
+
         const exportData = {
             timestamp: new Date().toISOString(),
-            dateRange: `${dateRange} days`,
-            metrics: analyticsData,
-            offerPerformance: offerPerformanceData,
-            revenueData: revenueData,
-            customerSegments: customerSegmentData
+            dateRange: { startDate, endDate },
+            restaurantFilter: selectedRestaurant || 'All',
+            data: analyticsData
         };
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -116,7 +117,7 @@ const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
         URL.revokeObjectURL(url);
     };
 
-    if (loading) {
+    if (loading && !analyticsData) {
         return (
             <div className="flex items-center justify-center h-96">
                 <div className="text-center">
@@ -127,50 +128,60 @@ const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
         );
     }
 
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+                    <p className="text-gray-900 font-semibold mb-2">Failed to load analytics</p>
+                    <p className="text-gray-600 mb-4">{error}</p>
+                    <button
+                        onClick={loadAnalytics}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!analyticsData) return null;
+
     return (
         <div className="space-y-6">
             {/* Controls */}
-            <div className="bg-white rounded-xl border p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
+            <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div className="flex items-end gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-                            <select
-                                value={dateRange}
-                                onChange={(e) => setDateRange(e.target.value)}
-                                className="p-2 border rounded-md text-sm"
-                            >
-                                <option value="7">Last 7 days</option>
-                                <option value="30">Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                                <option value="365">Last year</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="p-2 border-2 border-gray-300 rounded-lg text-sm"
+                            />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Offer Type</label>
-                            <select
-                                value={selectedOfferType}
-                                onChange={(e) => setSelectedOfferType(e.target.value)}
-                                className="p-2 border rounded-md text-sm"
-                            >
-                                <option value="all">All Types</option>
-                                <option value="1">Product Specific</option>
-                                <option value="2">Category</option>
-                                <option value="3">Order Total</option>
-                                <option value="5">First Order</option>
-                                <option value="6">Loyalty Tier</option>
-                                <option value="9">Flash Sale</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="p-2 border-2 border-gray-300 rounded-lg text-sm"
+                            />
                         </div>
                     </div>
 
                     <div className="flex gap-2">
                         <button
                             onClick={loadAnalytics}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                            disabled={loading}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
                         >
-                            <RefreshCw className="w-4 h-4" />
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </button>
                         <button
@@ -185,273 +196,300 @@ const OffersAnalyticsDashboard = ({ offers = [], API_BASE_URL }) => {
             </div>
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
-                    title="Total Revenue Impact"
-                    value={mockMetrics.totalRevenue}
-                    change={28.4}
-                    icon={DollarSign}
-                    color="bg-green-500"
-                    prefix="₪"
-                />
-                <MetricCard
-                    title="Customer Savings"
-                    value={mockMetrics.totalSavings}
-                    change={15.2}
+                    title="Total Offers"
+                    value={metrics.totalOffers}
                     icon={Target}
                     color="bg-blue-500"
-                    prefix="₪"
+                />
+                <MetricCard
+                    title="Active Offers"
+                    value={metrics.activeOffers}
+                    icon={CheckCircle}
+                    color="bg-green-500"
+                />
+                <MetricCard
+                    title="Total Discount Given"
+                    value={metrics.totalDiscountGiven.toFixed(2)}
+                    icon={DollarSign}
+                    color="bg-purple-500"
+                    prefix="JOD "
+                />
+                <MetricCard
+                    title="Avg Discount/Order"
+                    value={metrics.averageDiscountPerOrder.toFixed(2)}
+                    icon={TrendingUp}
+                    color="bg-orange-500"
+                    prefix="JOD "
                 />
                 <MetricCard
                     title="Total Usage"
-                    value={mockMetrics.customerUsage}
-                    change={32.1}
-                    icon={Users}
-                    color="bg-purple-500"
-                />
-                <MetricCard
-                    title="Conversion Rate"
-                    value={mockMetrics.conversionRate}
-                    change={8.3}
-                    icon={TrendingUp}
-                    color="bg-orange-500"
-                    suffix="%"
-                />
-                <MetricCard
-                    title="Avg Order Value"
-                    value={mockMetrics.avgOrderValue}
-                    change={12.7}
-                    icon={Award}
+                    value={metrics.totalUsage}
+                    icon={Activity}
                     color="bg-indigo-500"
-                    prefix="₪"
                 />
                 <MetricCard
-                    title="New Customers"
-                    value={mockMetrics.newCustomers}
-                    change={45.8}
-                    icon={Zap}
+                    title="Unique Users"
+                    value={metrics.uniqueUsers}
+                    icon={Users}
+                    color="bg-teal-500"
+                />
+                <MetricCard
+                    title="Expired Offers"
+                    value={metrics.expiredOffers}
+                    icon={Clock}
                     color="bg-red-500"
                 />
+                <MetricCard
+                    title="Flash Sales Sold Out"
+                    value={metrics.flashSalesSoldOut}
+                    icon={Zap}
+                    color="bg-yellow-500"
+                />
             </div>
 
-            {/* Revenue Trend */}
-            <div className="bg-white rounded-xl border p-6">
-                <h3 className="text-xl font-semibold mb-6">Revenue Impact Over Time</h3>
-                <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={revenueData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="date" />
-                            <YAxis />
-                            <Tooltip
-                                formatter={(value, name) => [`₪${value.toLocaleString()}`, name]}
-                                labelFormatter={(label) => `Month: ${label}`}
-                            />
-                            <Legend />
-                            <Line
-                                type="monotone"
-                                dataKey="baseline"
-                                stroke="#6b7280"
-                                strokeWidth={2}
-                                name="Baseline Revenue"
-                                strokeDasharray="5 5"
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="withOffers"
-                                stroke="#ef4444"
-                                strokeWidth={3}
-                                name="With Offers"
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
+            {/* Daily Usage Trend */}
+            {analyticsData.dailyUsage && analyticsData.dailyUsage.length > 0 && (
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
+                    <h3 className="text-xl font-semibold mb-6">Daily Usage Trend</h3>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={analyticsData.dailyUsage}>
+                                <defs>
+                                    <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorDiscount" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis
+                                    dataKey="date"
+                                    tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                />
+                                <YAxis yAxisId="left" />
+                                <YAxis yAxisId="right" orientation="right" />
+                                <Tooltip
+                                    labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                                    formatter={(value, name) => [
+                                        name === 'usageCount' ? value : `JOD ${value}`,
+                                        name === 'usageCount' ? 'Usage Count' : 'Total Discount'
+                                    ]}
+                                />
+                                <Legend />
+                                <Area
+                                    yAxisId="left"
+                                    type="monotone"
+                                    dataKey="usageCount"
+                                    stroke="#3b82f6"
+                                    fillOpacity={1}
+                                    fill="url(#colorUsage)"
+                                    name="Usage Count"
+                                />
+                                <Area
+                                    yAxisId="right"
+                                    type="monotone"
+                                    dataKey="totalDiscount"
+                                    stroke="#10b981"
+                                    fillOpacity={1}
+                                    fill="url(#colorDiscount)"
+                                    name="Total Discount (JOD)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Performance by Offer Type */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border p-6">
+            {analyticsData.offerTypeStats && analyticsData.offerTypeStats.length > 0 && (
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
                     <h3 className="text-xl font-semibold mb-6">Performance by Offer Type</h3>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={offerPerformanceData}>
+                            <BarChart data={analyticsData.offerTypeStats}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
+                                <XAxis
+                                    dataKey="offerType"
+                                    tickFormatter={(type) => {
+                                        const types = { 1: 'Product', 2: 'Category', 3: 'Order' };
+                                        return types[type] || `Type ${type}`;
+                                    }}
+                                />
                                 <YAxis />
-                                <Tooltip formatter={(value) => [`₪${value.toLocaleString()}`, 'Revenue']} />
-                                <Bar dataKey="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                                <Tooltip
+                                    formatter={(value, name) => [
+                                        name === 'totalDiscount' ? `JOD ${value}` : value,
+                                        name === 'count' ? 'Total Offers' :
+                                            name === 'activeCount' ? 'Active Offers' :
+                                                name === 'totalUsage' ? 'Usage Count' :
+                                                    'Total Discount'
+                                    ]}
+                                    labelFormatter={(type) => {
+                                        const types = { 1: 'Product Offers', 2: 'Category Offers', 3: 'Order Offers' };
+                                        return types[type] || `Offer Type ${type}`;
+                                    }}
+                                />
+                                <Legend />
+                                <Bar dataKey="count" fill="#3b82f6" name="Total Offers" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="activeCount" fill="#10b981" name="Active Offers" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="totalUsage" fill="#f59e0b" name="Usage Count" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
-
-                <div className="bg-white rounded-xl border p-6">
-                    <h3 className="text-xl font-semibold mb-6">Customer Segments</h3>
-                    <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={customerSegmentData}
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={100}
-                                    fill="#8884d8"
-                                    dataKey="value"
-                                    label={({segment, value}) => `${segment}: ${value}%`}
-                                >
-                                    {customerSegmentData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value) => [`${value}%`, 'Share']} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-
-            {/* Detailed Performance Table */}
-            <div className="bg-white rounded-xl border p-6">
-                <h3 className="text-xl font-semibold mb-6">Detailed Offer Performance</h3>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                        <tr className="border-b">
-                            <th className="text-left p-3 font-semibold">Offer Type</th>
-                            <th className="text-right p-3 font-semibold">Active Offers</th>
-                            <th className="text-right p-3 font-semibold">Total Usage</th>
-                            <th className="text-right p-3 font-semibold">Revenue Impact</th>
-                            <th className="text-right p-3 font-semibold">Conversion Rate</th>
-                            <th className="text-right p-3 font-semibold">Avg Savings</th>
-                            <th className="text-right p-3 font-semibold">ROI</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {offerPerformanceData.map((row, index) => (
-                            <tr key={index} className="border-b hover:bg-gray-50">
-                                <td className="p-3 font-medium">{row.name}</td>
-                                <td className="p-3 text-right">{row.offers}</td>
-                                <td className="p-3 text-right">{row.usage.toLocaleString()}</td>
-                                <td className="p-3 text-right text-green-600 font-semibold">
-                                    ₪{row.revenue.toLocaleString()}
-                                </td>
-                                <td className="p-3 text-right">{row.conversionRate}%</td>
-                                <td className="p-3 text-right">₪{(row.revenue / row.usage).toFixed(2)}</td>
-                                <td className="p-3 text-right">
-                                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                            row.conversionRate > 30
-                                                ? 'bg-green-100 text-green-800'
-                                                : row.conversionRate > 20
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-red-100 text-red-800'
-                                        }`}>
-                                            {row.conversionRate > 30 ? 'Excellent' : row.conversionRate > 20 ? 'Good' : 'Needs Improvement'}
-                                        </span>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            )}
 
             {/* Top Performing Offers */}
-            <div className="bg-white rounded-xl border p-6">
-                <h3 className="text-xl font-semibold mb-6">Top Performing Offers</h3>
-
-                <div className="space-y-4">
-                    {offers.slice(0, 5).map((offer, index) => {
-                        const mockUsage = Math.floor(Math.random() * 500) + 50;
-                        const mockRevenue = Math.floor(Math.random() * 10000) + 1000;
-                        const mockConversion = (Math.random() * 40 + 10).toFixed(1);
-
-                        return (
-                            <div key={offer.offerId} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600">
+            {analyticsData.topPerformingOffers && analyticsData.topPerformingOffers.length > 0 && (
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
+                    <h3 className="text-xl font-semibold mb-6">Top Performing Offers</h3>
+                    <div className="space-y-3">
+                        {analyticsData.topPerformingOffers.map((offer, index) => (
+                            <div key={offer.offerId} className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center gap-4 flex-1">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                                        index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                            index === 1 ? 'bg-gray-100 text-gray-700' :
+                                                index === 2 ? 'bg-orange-100 text-orange-700' :
+                                                    'bg-blue-100 text-blue-700'
+                                    }`}>
                                         #{index + 1}
                                     </div>
-                                    <div>
-                                        <h4 className="font-medium text-gray-900">{offer.name}</h4>
+                                    <div className="flex-1">
+                                        <h4 className="font-semibold text-gray-900">{offer.name}</h4>
                                         <p className="text-sm text-gray-500">
-                                            {offer.discountType === 1 ? `${offer.discountValue}% off` :
-                                                offer.discountType === 2 ? `₪${offer.discountValue} off` :
-                                                    'Special offer'}
+                                            {offer.offerType === 1 ? 'Product Offer' :
+                                                offer.offerType === 2 ? 'Category Offer' :
+                                                    offer.offerType === 3 ? 'Order Offer' : 'Special Offer'}
                                         </p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-center gap-6 text-sm">
                                     <div className="text-center">
-                                        <div className="font-semibold text-gray-900">{mockUsage}</div>
-                                        <div className="text-gray-500">Uses</div>
+                                        <div className="font-bold text-gray-900">{offer.usageCount}</div>
+                                        <div className="text-gray-500 text-xs">Uses</div>
                                     </div>
                                     <div className="text-center">
-                                        <div className="font-semibold text-green-600">₪{mockRevenue.toLocaleString()}</div>
-                                        <div className="text-gray-500">Revenue</div>
+                                        <div className="font-bold text-green-600">JOD {offer.totalDiscount.toFixed(2)}</div>
+                                        <div className="text-gray-500 text-xs">Discount</div>
                                     </div>
                                     <div className="text-center">
-                                        <div className="font-semibold text-blue-600">{mockConversion}%</div>
-                                        <div className="text-gray-500">Conversion</div>
+                                        <div className="font-bold text-blue-600">{offer.conversionRate.toFixed(1)}%</div>
+                                        <div className="text-gray-500 text-xs">Conv. Rate</div>
                                     </div>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Insights and Recommendations */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border p-6">
-                <h3 className="text-xl font-semibold mb-4 text-gray-900">AI Insights & Recommendations</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                        <div className="bg-white rounded-lg p-4 border border-green-200">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <h4 className="font-semibold text-green-800">High Performance</h4>
-                            </div>
-                            <p className="text-sm text-green-700">
-                                Flash Sale offers show 78% conversion rate - consider expanding flash sale frequency during peak hours.
-                            </p>
-                        </div>
-
-                        <div className="bg-white rounded-lg p-4 border border-yellow-200">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                <h4 className="font-semibold text-yellow-800">Opportunity</h4>
-                            </div>
-                            <p className="text-sm text-yellow-700">
-                                Loyalty tier offers underperforming at 18.9% conversion. Consider increasing discount values or adding exclusive perks.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="bg-white rounded-lg p-4 border border-blue-200">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <h4 className="font-semibold text-blue-800">Trend Analysis</h4>
-                            </div>
-                            <p className="text-sm text-blue-700">
-                                First-order offers driving 42% conversion but only 4 active offers. Scale up new customer acquisition campaigns.
-                            </p>
-                        </div>
-
-                        <div className="bg-white rounded-lg p-4 border border-red-200">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                <h4 className="font-semibold text-red-800">Action Required</h4>
-                            </div>
-                            <p className="text-sm text-red-700">
-                                Category offers show declining trend. Review product selection and consider seasonal adjustments.
-                            </p>
-                        </div>
+                        ))}
                     </div>
                 </div>
-            </div>
+            )}
+
+            {/* Flash Sale Performance */}
+            {analyticsData.flashSalePerformance && analyticsData.flashSalePerformance.length > 0 && (
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
+                    <h3 className="text-xl font-semibold mb-6">Flash Sale Performance</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                            <tr className="border-b-2 border-gray-200">
+                                <th className="text-left p-3 font-semibold">Offer Name</th>
+                                <th className="text-right p-3 font-semibold">Total Qty</th>
+                                <th className="text-right p-3 font-semibold">Sold</th>
+                                <th className="text-right p-3 font-semibold">Sell-Through Rate</th>
+                                <th className="text-right p-3 font-semibold">Status</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {analyticsData.flashSalePerformance.map((flash) => (
+                                <tr key={flash.offerId} className="border-b border-gray-100 hover:bg-gray-50">
+                                    <td className="p-3 font-medium">{flash.name}</td>
+                                    <td className="p-3 text-right">{flash.totalQuantity}</td>
+                                    <td className="p-3 text-right font-semibold text-blue-600">{flash.soldQuantity}</td>
+                                    <td className="p-3 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className={`h-2 rounded-full ${
+                                                        flash.sellThroughRate >= 90 ? 'bg-red-500' :
+                                                            flash.sellThroughRate >= 70 ? 'bg-orange-500' :
+                                                                flash.sellThroughRate >= 50 ? 'bg-yellow-500' :
+                                                                    'bg-green-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(flash.sellThroughRate, 100)}%` }}
+                                                />
+                                            </div>
+                                            <span className="font-semibold">{flash.sellThroughRate.toFixed(1)}%</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-3 text-right">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                                flash.soldQuantity >= flash.totalQuantity
+                                                    ? 'bg-red-100 text-red-700'
+                                                    : flash.sellThroughRate >= 70
+                                                        ? 'bg-yellow-100 text-yellow-700'
+                                                        : 'bg-green-100 text-green-700'
+                                            }`}>
+                                                {flash.soldQuantity >= flash.totalQuantity ? 'SOLD OUT' : 'ACTIVE'}
+                                            </span>
+                                    </td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Summary Stats Table */}
+            {analyticsData.offerTypeStats && analyticsData.offerTypeStats.length > 0 && (
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
+                    <h3 className="text-xl font-semibold mb-6">Detailed Statistics by Offer Type</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                            <tr className="border-b-2 border-gray-200">
+                                <th className="text-left p-3 font-semibold">Offer Type</th>
+                                <th className="text-right p-3 font-semibold">Total Offers</th>
+                                <th className="text-right p-3 font-semibold">Active</th>
+                                <th className="text-right p-3 font-semibold">Total Usage</th>
+                                <th className="text-right p-3 font-semibold">Total Discount</th>
+                                <th className="text-right p-3 font-semibold">Avg per Use</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {analyticsData.offerTypeStats.map((stat) => (
+                                <tr key={stat.offerType} className="border-b border-gray-100 hover:bg-gray-50">
+                                    <td className="p-3 font-medium">
+                                        {stat.offerType === 1 ? 'Product Specific' :
+                                            stat.offerType === 2 ? 'Category' :
+                                                stat.offerType === 3 ? 'Order Total' : `Type ${stat.offerType}`}
+                                    </td>
+                                    <td className="p-3 text-right">{stat.count}</td>
+                                    <td className="p-3 text-right">
+                                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded font-semibold">
+                                                {stat.activeCount}
+                                            </span>
+                                    </td>
+                                    <td className="p-3 text-right font-semibold">{stat.totalUsage}</td>
+                                    <td className="p-3 text-right text-green-600 font-bold">
+                                        JOD {stat.totalDiscount.toFixed(2)}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                        JOD {stat.totalUsage > 0 ? (stat.totalDiscount / stat.totalUsage).toFixed(2) : '0.00'}
+                                    </td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
