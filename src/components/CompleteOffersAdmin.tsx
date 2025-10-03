@@ -40,8 +40,8 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
-    const API_BASE_URL = 'http://localhost:5159';
+    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    //const API_BASE_URL = 'http://localhost:5159';
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
