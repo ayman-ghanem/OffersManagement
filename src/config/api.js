@@ -1,9 +1,9 @@
 // API configuration
 const config = {
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5159/api',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://wheelsnow-api.onrender.com',
     endpoints: {
         auth: {
-            login: '/admin/OffersManagement/login'
+            login: '/api/admin/OffersManagement/login'
         },
         offers: {
             list: '/offers',

@@ -17,6 +17,7 @@ import RestaurantBranchSelection from './RestaurantBranchSelection';
 import TargetSelection from './TargetSelection';
 import OfferTestingPanel from './OfferTestingPanel';
 import OfferCard from './OfferCard';
+import { getApiBaseUrlWithoutApi } from '../utils/env';
 
 
 const CompleteOffersAdmin = () => {
@@ -40,8 +41,9 @@ const CompleteOffersAdmin = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOffer, setEditingOffer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
+    //const API_BASE_URL = 'https://wheelsnow-api.onrender.com';
     //const API_BASE_URL = 'http://localhost:5159';
+    const API_BASE_URL = getApiBaseUrlWithoutApi();
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     const [expandedRestaurants, setExpandedRestaurants] = useState([]); // Which restaurants show branches
@@ -136,8 +138,13 @@ const CompleteOffersAdmin = () => {
         const needsProductCategoryData = [1, 2].includes(formData.offerType);
 
         if (needsProductCategoryData) {
-            loadCategoriesForRestaurants(formData.RestaurantIds);
-            loadProductsForRestaurants(formData.RestaurantIds);
+            // Use a timeout to debounce rapid changes
+            const timeoutId = setTimeout(() => {
+                loadCategoriesForRestaurants(formData.RestaurantIds);
+                loadProductsForRestaurants(formData.RestaurantIds);
+            }, 1000);
+
+            return () => clearTimeout(timeoutId);
         }
     }, [formData.RestaurantIds, formData.offerType, dataLoaded.restaurants]);
 

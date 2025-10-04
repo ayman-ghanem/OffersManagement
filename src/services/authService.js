@@ -21,7 +21,8 @@ class AuthService {
                 body: JSON.stringify({
                     userName: username,
                     password: password
-                })
+                }),
+                mode: 'cors' // Explicitly set CORS mode
             });
 
             if (!response.ok) {
