@@ -974,7 +974,7 @@ const CompleteOffersAdmin = () => {
 
             // Advanced settings (always show but some fields conditional)
             priority: () => false,
-            isStackable: () => false,
+            isStackable: () => true,
             maxUsagePerUser: () => true,
             wheelsContribution: () => true,
             maxUsageTotal: () => true,
